@@ -10,8 +10,11 @@ import (
 	"github.com/lvgj-stack/stander/internal/config"
 )
 
+// hertzServer names the concrete server type so serve() reads clearly.
+type hertzServer = server.Hertz
+
 // newHertz builds the single Hertz instance every entrypoint runs on.
-func newHertz(c *config.Config) *server.Hertz {
+func newHertz(c *config.Config) *hertzServer {
 	h := server.Default(
 		server.WithHostPorts(":" + c.Server.Port),
 	)

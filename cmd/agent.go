@@ -56,7 +56,7 @@ var agentCmd = &cobra.Command{
 		}
 		config.SetConfig(c)
 		startPprof()
-		return server.RunAgent(c)
+		return server.RunAgent(cmd.Context(), c)
 	},
 }
 

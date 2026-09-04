@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,10 +18,8 @@ import (
 	"github.com/lvgj-stack/stander/internal/model/entity"
 	"github.com/lvgj-stack/stander/internal/service/req"
 	"github.com/lvgj-stack/stander/internal/service/resp"
-	"github.com/lvgj-stack/stander/internal/utils/cron"
 )
 
-var userPlanUsageMap = sync.Map{}
 var nodeTrafficMap = sync.Map{}
 
 func ObserverNetworkTraffic(ctx context.Context, r *req.ObserverNetworkTrafficReq) (*resp.ReportNetworkTrafficResp, error) {
@@ -104,127 +101,4 @@ func ReportNetworkTraffic(ctx context.Context, r *req.ReportNetworkTrafficReq) (
 		return nil, err
 	}
 	return &resp.ReportNetworkTrafficResp{}, nil
-}
-
-func calculateUserPeriodTrafficUsage(ctx context.Context) error {
-	userResetChan := make(chan *entity.User, 10)
-
-	go func() {
-		for {
-			select {
-			case user := <-userResetChan:
-				nextResetTime := time.Now()
-				switch entity.PlanPeriod(*user.TrafficPlan.Period) {
-				case entity.Month:
-					nextResetTime = nextResetTime.AddDate(0, 1, 0)
-				case entity.Quarter:
-					nextResetTime = nextResetTime.AddDate(0, 3, 0)
-				case entity.HalfYear:
-					nextResetTime = nextResetTime.AddDate(0, 6, 0)
-				case entity.Year:
-					nextResetTime = nextResetTime.AddDate(1, 0, 0)
-				}
-
-				if user.ExpirationTime.Add(5 * time.Hour).After(nextResetTime) {
-					_, err := dal.User.WithContext(ctx).Where(dal.User.ID.Eq(*user.ID)).Update(dal.User.ResetTrafficTime, nextResetTime)
-					if err != nil {
-						hlog.Errorf("failed to refresh user reset time, user: %v, err: %v", user, err)
-						continue
-					}
-				} else {
-					hlog.Warnf("user expired! user: %s", *user.Username)
-				}
-			}
-		}
-	}()
-	go func() {
-		for {
-			time.Sleep(1 * time.Minute)
-			users, err := dal.User.WithContext(ctx).Preload(dal.User.TrafficPlan).Find()
-			if err != nil {
-				hlog.Errorf("calculateUserPeriodTrafficUsage get user from db failed, err: %v", err)
-				return
-			}
-			for _, user := range users {
-				var resetTime time.Time
-				if user.ResetTrafficTime != nil {
-					resetTime = *user.ResetTrafficTime
-				}
-				v, ok := userPlanUsageMap.Load(*user.ID)
-				if !ok {
-					hlog.Infof("UserPlanUsage: %s, Taffic: %s GB, %v",
-						fmt.Sprintf("%8s", *user.Username),
-						fmt.Sprintf("%10s", fmt.Sprintf("%d/%d", 0, user.TrafficPlan.TotalTraffic/1024/1024/1024)),
-						resetTime)
-					continue
-				}
-				used := v.(int64)
-				hlog.Infof("UserPlanUsage: %s, Taffic: %s GB, %v",
-					fmt.Sprintf("%8s", *user.Username),
-					fmt.Sprintf("%10s", fmt.Sprintf("%d/%d", used/1024/1024/1024, user.TrafficPlan.TotalTraffic/1024/1024/1024)),
-					resetTime)
-			}
-			//userPlanUsageMap.Range(func(key, value interface{}) bool {
-			//	v := value.(int64)
-			//	hlog.Debugf("userPlanUsageMap, key: %v, value: %v", key, v/1024/1024/1024)
-			//	return true
-			//})
-		}
-	}()
-	f := func(ctx context.Context) error {
-		// 1. 计算周期
-		users, err := dal.User.WithContext(ctx).Preload(dal.User.TrafficPlan).Find()
-		if err != nil {
-			return err
-		}
-		// 2. 计算用户当前周期用量
-		for _, user := range users {
-			//hlog.Infof("user_id: %d, user_name: %s, planId: %d", user.ID, *user.Username, user.PlanID)
-			if user.ResetTrafficTime == nil || user.TrafficPlan.Period == nil {
-				continue
-			}
-			to := *user.ResetTrafficTime
-			from := *user.ResetTrafficTime
-
-			switch entity.PlanPeriod(*user.TrafficPlan.Period) {
-			case entity.Month:
-				from = from.AddDate(0, -1, -1)
-			case entity.Quarter:
-				from = from.AddDate(0, -3, -1)
-			case entity.HalfYear:
-				from = from.AddDate(0, -6, -1)
-			case entity.Year:
-				from = from.AddDate(-1, 0, -1)
-			}
-
-			var periodTotalTraffic int64
-			dailyTraffics, err := dal.UserDailyTraffic.WithContext(ctx).
-				Select(dal.UserDailyTraffic.TotalTraffic).
-				Where(
-					dal.UserDailyTraffic.UserID.Eq(*user.ID),
-					dal.UserDailyTraffic.Date.Gte(from),
-					dal.UserDailyTraffic.Date.Lte(to),
-				).Find()
-			if err != nil {
-				return err
-			}
-			for _, traffic := range dailyTraffics {
-				periodTotalTraffic += traffic.TotalTraffic
-			}
-
-			// 当前时间超过了重置时间 or 使用流量超量了
-			if time.Now().After(to) || periodTotalTraffic > user.TrafficPlan.TotalTraffic {
-				userResetChan <- user
-			}
-
-			//hlog.Infof("calculateUserPeriodTrafficUsage, username: %v, from: %v, to: %v", *user.Username, from, to)
-			userPlanUsageMap.Store(*user.ID, periodTotalTraffic)
-		}
-		return nil
-	}
-	c := cron.New(30 * time.Second)
-	if err := c.Do(ctx, f); err != nil {
-		return err
-	}
-	return nil
 }

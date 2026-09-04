@@ -1,8 +1,11 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"strings"
+	"time"
 
 	"github.com/spf13/viper"
 
@@ -46,6 +49,8 @@ type Server struct {
 	Port     string
 	NodeRole string
 	LogLevel int
+	// WorkerIntervalSeconds overrides how often the background job runs.
+	WorkerIntervalSeconds int
 }
 
 // Admin holds settings for the admin console that used to live in naive-admin-go.
@@ -65,24 +70,58 @@ func (r Relay) String() string {
 	return r.Name + "#" + r.Src + "#" + r.Chain + "#" + r.RAddr
 }
 
-func InitConfig(configPath string) (*Config, error) {
-	c = &Config{}
-	viper.SetConfigFile(configPath)
+// InitConfig loads configuration from a file, the environment, or both.
+//
+// Every key can be overridden by a STANDER_-prefixed environment variable
+// (STANDER_DATABASE_ADDR, STANDER_ADMIN_JWTSIGNINGKEY, ...). The defaults are
+// registered with viper rather than applied afterwards, because viper's
+// AutomaticEnv only resolves keys it already knows about — without them an
+// environment-only deployment would silently read nothing.
+//
+// requireFile distinguishes "the operator pointed at a config file" from "we
+// fell back to the default path". A missing file is an error in the first case
+// and fine in the second, which is what lets a container run on env vars alone.
+func InitConfig(configPath string, requireFile bool) (*Config, error) {
+	v := viper.New()
+	registerDefaults(v)
 
-	// Environment variables win over the file, so a deployment can override any
-	// key without editing stander.yaml: STANDER_DATABASE_ADDR, STANDER_ADMIN_JWTSIGNINGKEY, ...
-	viper.SetEnvPrefix("STANDER")
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	viper.AutomaticEnv()
+	v.SetEnvPrefix("STANDER")
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
 
-	if err := viper.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("read config %s: %w", configPath, err)
+	if configPath != "" {
+		v.SetConfigFile(configPath)
+		if err := v.ReadInConfig(); err != nil {
+			if requireFile || !errors.Is(err, fs.ErrNotExist) {
+				return nil, fmt.Errorf("read config %s: %w", configPath, err)
+			}
+		}
 	}
-	if err := viper.Unmarshal(&c); err != nil {
+
+	c = &Config{}
+	if err := v.Unmarshal(c); err != nil {
 		return nil, fmt.Errorf("parse config %s: %w", configPath, err)
 	}
 	applyDefaults(c)
 	return c, nil
+}
+
+// registerDefaults declares every key so that AutomaticEnv can resolve it and
+// so an operator sees sane values without writing a config file.
+func registerDefaults(v *viper.Viper) {
+	v.SetDefault("server.port", "8123")
+	v.SetDefault("server.noderole", string(common.Controller))
+	v.SetDefault("server.loglevel", 2)
+	v.SetDefault("server.workerintervalseconds", 30)
+
+	v.SetDefault("enablerelay", false)
+
+	v.SetDefault("database.username", "root")
+	v.SetDefault("database.password", "")
+	v.SetDefault("database.dbname", "stander")
+	v.SetDefault("database.addr", "127.0.0.1:3306")
+
+	v.SetDefault("admin.jwtsigningkey", "")
 }
 
 func applyDefaults(c *Config) {
@@ -122,4 +161,13 @@ func GetKey() string {
 
 func GetAgentConfig() *Agent {
 	return c.Agent
+}
+
+// WorkerInterval is how often the background reconciliation pass runs.
+// Zero means the built-in default.
+func (s *Server) WorkerInterval() time.Duration {
+	if s == nil || s.WorkerIntervalSeconds <= 0 {
+		return 0
+	}
+	return time.Duration(s.WorkerIntervalSeconds) * time.Second
 }

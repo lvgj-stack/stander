@@ -46,8 +46,10 @@ func (auth) Captcha(c context.Context, ctx *app.RequestContext) {
 		return
 	}
 
-	ctx.Header("Content-Type", parts[0])
-	ctx.Data(http.StatusOK, parts[0], imgData)
+	// parts[0] is the data-URI prefix ("data:image/png;base64"), not a media
+	// type. Sending it verbatim produced Content-Type: data:image/png;base64.
+	contentType := strings.TrimSuffix(strings.TrimPrefix(parts[0], "data:"), ";base64")
+	ctx.Data(http.StatusOK, contentType, imgData)
 }
 
 func (auth) Login(c context.Context, ctx *app.RequestContext) {

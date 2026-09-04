@@ -1,6 +1,8 @@
 package db
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -57,4 +59,34 @@ func Init(c *config.Database) error {
 
 func Get() *gorm.DB {
 	return Dao
+}
+
+// Pinger adapts the package-level handle to the api.Prober interface used by
+// the readiness probe.
+type Pinger struct{}
+
+// Ping checks that the database is reachable. It reports an error rather than
+// panicking when Init has not run, so a misconfigured process fails its
+// readiness check instead of crash-looping.
+func (Pinger) Ping(ctx context.Context) error {
+	if Dao == nil {
+		return errors.New("database not initialised")
+	}
+	sqlDB, err := Dao.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.PingContext(ctx)
+}
+
+// Close releases the connection pool.
+func Close() error {
+	if Dao == nil {
+		return nil
+	}
+	sqlDB, err := Dao.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.Close()
 }

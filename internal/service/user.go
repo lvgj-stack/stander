@@ -39,10 +39,11 @@ func GetUserPlanInfo(ctx context.Context, r *req.GetUserPlanInfoReq) (*resp.GetU
 	if user.TrafficPlan.PlanName != nil {
 		plan = *user.TrafficPlan.PlanName
 	}
-	value, ok := userPlanUsageMap.Load(*user.ID)
-	if ok {
-		usedTraffic = value.(int64) / 1024 / 1024 / 1024
+	used, err := PeriodTrafficUsage(ctx, user)
+	if err != nil {
+		return nil, err
 	}
+	usedTraffic = bytesToGB(used)
 
 	var dailyTraffics []resp.DailyTraffic
 	for _, df := range dfs {
@@ -92,11 +93,11 @@ func ListUsers(ctx context.Context, r *req.ListUsersReq) (*resp.ListUsersResp, e
 	}
 	var userTos []*resp.UserTo
 	for _, user := range users {
-		usedTraffic := int64(0)
-		value, ok := userPlanUsageMap.Load(*user.ID)
-		if ok {
-			usedTraffic = value.(int64) / 1024 / 1024 / 1024
+		used, err := PeriodTrafficUsage(ctx, user)
+		if err != nil {
+			return nil, err
 		}
+		usedTraffic := bytesToGB(used)
 		userTos = append(userTos, &resp.UserTo{
 			User:        user,
 			UsedTraffic: usedTraffic,

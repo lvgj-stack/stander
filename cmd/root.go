@@ -32,7 +32,7 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&configPath, "config-path", "c", "stander.yaml", "配置文件路径")
-	rootCmd.PersistentFlags().IntVar(&logLevel, "log-level", 3, "日志级别")
+	rootCmd.PersistentFlags().IntVar(&logLevel, "log-level", 2, "日志级别 (0=trace 1=debug 2=info 3=notice 4=warn 5=error)")
 	rootCmd.PersistentFlags().StringVar(&pprofAddr, "pprof-addr", ":48123", "pprof 监听地址，置空则不启动")
 }
 
