@@ -19,7 +19,7 @@ func (node) Handle(c context.Context, ctx *app.RequestContext) {
 	action := ctx.Query("Action")
 	switch action {
 	case "ListNodes":
-		res, err := service.ListNode(c, ctx)
+		res, err := call(c, ctx, service.ListNode)
 		if err != nil {
 			Resp.Err(ctx, 20001, err.Error())
 			return
@@ -29,34 +29,34 @@ func (node) Handle(c context.Context, ctx *app.RequestContext) {
 			"total":    res.TotalCount,
 		})
 	case "AddNode":
-		res, err := service.AddNode(c, ctx)
+		res, err := call(c, ctx, service.AddNode)
 		if err != nil {
 			Resp.Err(ctx, 20001, err.Error())
 			return
 		}
 		Resp.Succ(ctx, res.Key)
 	case "DeleteNode":
-		res, err := service.DelNode(c, ctx)
+		res, err := call(c, ctx, service.DelNode)
 		if err != nil {
 			Resp.Err(ctx, 20001, err.Error())
 			return
 		}
 		Resp.Succ(ctx, res.ID)
 	case "EditNode":
-		if _, err := service.EditNode(c, ctx); err != nil {
+		if _, err := call(c, ctx, service.EditNode); err != nil {
 			Resp.Err(ctx, 20001, err.Error())
 			return
 		}
 		Resp.Succ(ctx, nil)
 	case "ListNodeChainRelationShips":
-		res, err := service.ListNodeChainRelationShips(c, ctx)
+		res, err := call(c, ctx, service.ListNodeChainRelationShips)
 		if err != nil {
 			Resp.Err(ctx, 20001, err.Error())
 			return
 		}
 		Resp.Succ(ctx, res.Chains)
 	case "GetNodePermissions":
-		res, err := service.GetNodePermissions(c, ctx)
+		res, err := call(c, ctx, service.GetNodePermissions)
 		if err != nil {
 			Resp.Err(ctx, 20001, err.Error())
 			return

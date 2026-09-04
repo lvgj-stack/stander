@@ -16,7 +16,7 @@ func (rule) Handle(c context.Context, ctx *app.RequestContext) {
 	action := ctx.Query("Action")
 	switch action {
 	case "ListRules":
-		res, err := service.ListRule(c, ctx)
+		res, err := call(c, ctx, service.ListRule)
 		if err != nil {
 			Resp.Err(ctx, 20001, err.Error())
 			return
@@ -26,28 +26,28 @@ func (rule) Handle(c context.Context, ctx *app.RequestContext) {
 			"total":    res.TotalCount,
 		})
 	case "AddRule":
-		res, err := service.AddRule(c, ctx)
+		res, err := call(c, ctx, service.AddRule)
 		if err != nil {
 			Resp.Err(ctx, 20001, err.Error())
 			return
 		}
 		Resp.Succ(ctx, res)
 	case "DeleteRule":
-		res, err := service.DelRule(c, ctx)
+		res, err := call(c, ctx, service.DelRule)
 		if err != nil {
 			Resp.Err(ctx, 20001, err.Error())
 			return
 		}
 		Resp.Succ(ctx, res)
 	case "ModifyRule":
-		res, err := service.ModifyRule(c, ctx)
+		res, err := call(c, ctx, service.ModifyRule)
 		if err != nil {
 			Resp.Err(ctx, 20001, err.Error())
 			return
 		}
 		Resp.Succ(ctx, res)
 	case "TestRule":
-		res, err := service.TestRule(c, ctx)
+		res, err := call(c, ctx, service.TestRule)
 		if err != nil {
 			Resp.Err(ctx, 20001, err.Error())
 			return

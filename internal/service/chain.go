@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/common/hlog"
 	"github.com/thoas/go-funk"
 	"gorm.io/gen"
@@ -16,45 +15,22 @@ import (
 	"github.com/lvgj-stack/stander/internal/common"
 	"github.com/lvgj-stack/stander/internal/config"
 	"github.com/lvgj-stack/stander/internal/forward/manager"
+	"github.com/lvgj-stack/stander/internal/identity"
 	"github.com/lvgj-stack/stander/internal/model/dal"
 	"github.com/lvgj-stack/stander/internal/model/entity"
-	error2 "github.com/lvgj-stack/stander/internal/service/error"
 	"github.com/lvgj-stack/stander/internal/service/req"
 	"github.com/lvgj-stack/stander/internal/service/resp"
 )
 
 var permissionDenyError = errors.New("permission deny")
 
-func ChainSrv(c context.Context, ctx *app.RequestContext) {
-	action := ctx.Query("Action")
-	switch action {
-	case "ListChains":
-		resp, err := ListChain(c, ctx)
-		error2.WriteResponse(ctx, err, resp)
-	case "AddChain":
-		resp, err := AddChain(c, ctx)
-		error2.WriteResponse(ctx, err, resp)
-	case "DeleteChain":
-		resp, err := DelChain(c, ctx)
-		error2.WriteResponse(ctx, err, resp)
-	case "GetChainPermissions":
-		resp, err := GetChainPermissions(c, ctx)
-		error2.WriteResponse(ctx, err, resp)
-	case "EditChain":
-		resp, err := EditChain(c, ctx)
-		error2.WriteResponse(ctx, err, resp)
-	default:
-		error2.WriteResponse(ctx, errors.New("action not found"), nil)
-	}
-}
-
-func checkUserChainPermission(ctx context.Context, c *app.RequestContext, chainIds ...int64) error {
-	if c.GetString(common.HeaderRoleKey) == common.SUPER_ADMIN {
+func checkUserChainPermission(ctx context.Context, chainIds ...int64) error {
+	if identity.FromContext(ctx).IsSuperAdmin() {
 		return nil
 	}
 	var availableChainIds []int64
 	if err := dal.UserRoleChainMapping.WithContext(ctx).Select(dal.UserRoleChainMapping.ChainID).
-		Where(dal.UserRoleChainMapping.UserID.Eq(c.GetInt32(common.HeaderUserKey))).
+		Where(dal.UserRoleChainMapping.UserID.Eq(identity.FromContext(ctx).UserID)).
 		Scan(&availableChainIds); err != nil {
 		return permissionDenyError
 	}
@@ -68,11 +44,7 @@ func checkUserChainPermission(ctx context.Context, c *app.RequestContext, chainI
 	return nil
 }
 
-func AddChain(c context.Context, ctx *app.RequestContext) (*resp.AddChainResp, error) {
-	r := req.AddChainReq{}
-	if err := ctx.BindAndValidate(&r); err != nil {
-		return nil, err
-	}
+func AddChain(ctx context.Context, r *req.AddChainReq) (*resp.AddChainResp, error) {
 	if r.ChainType == "" {
 		r.ChainType = string(common.TCPConnector)
 	}
@@ -83,10 +55,10 @@ func AddChain(c context.Context, ctx *app.RequestContext) (*resp.AddChainResp, e
 		}
 		return &resp.AddChainResp{}, nil
 	}
-	if err := checkUserNodePermission(c, ctx, r.NodeId); err != nil {
+	if err := checkUserNodePermission(ctx, r.NodeId); err != nil {
 		return nil, err
 	}
-	node, err := dal.Q.Node.WithContext(c).Where(dal.Node.ID.Eq(r.NodeId)).First()
+	node, err := dal.Q.Node.WithContext(ctx).Where(dal.Node.ID.Eq(r.NodeId)).First()
 	if err != nil {
 		return nil, err
 	}
@@ -96,14 +68,14 @@ func AddChain(c context.Context, ctx *app.RequestContext) (*resp.AddChainResp, e
 		chainIp = *node.Ipv6
 	}
 
-	_, err = dal.Chain.WithContext(c).Where(
+	_, err = dal.Chain.WithContext(ctx).Where(
 		dal.Chain.Port.Eq(r.Port),
 		dal.Chain.NodeID.Eq(r.NodeId),
 		dal.Chain.IP.Eq(chainIp)).First()
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, errors.New("chain port exist")
 	}
-	cnt, err := dal.Q.Chain.WithContext(c).Where(dal.Chain.NodeID.Eq(node.ID), dal.Chain.Port.Eq(r.Port)).Count()
+	cnt, err := dal.Q.Chain.WithContext(ctx).Where(dal.Chain.NodeID.Eq(node.ID), dal.Chain.Port.Eq(r.Port)).Count()
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +86,7 @@ func AddChain(c context.Context, ctx *app.RequestContext) (*resp.AddChainResp, e
 		}
 	}
 
-	if err := dal.Q.Chain.WithContext(c).Create(&entity.Chain{
+	if err := dal.Q.Chain.WithContext(ctx).Create(&entity.Chain{
 		ChainName: &r.Name,
 		Port:      &r.Port,
 		IP:        &chainIp,
@@ -126,9 +98,9 @@ func AddChain(c context.Context, ctx *app.RequestContext) (*resp.AddChainResp, e
 		}
 		return nil, err
 	}
-	chain, _ := dal.Chain.WithContext(c).Where(dal.Chain.NodeID.Eq(r.NodeId), dal.Chain.Port.Eq(r.Port), dal.Chain.IP.Eq(chainIp)).First()
-	userId := ctx.GetInt32(common.HeaderUserKey)
-	if err := dal.UserRoleChainMapping.WithContext(c).Create(&entity.UserRoleChainMapping{
+	chain, _ := dal.Chain.WithContext(ctx).Where(dal.Chain.NodeID.Eq(r.NodeId), dal.Chain.Port.Eq(r.Port), dal.Chain.IP.Eq(chainIp)).First()
+	userId := identity.FromContext(ctx).UserID
+	if err := dal.UserRoleChainMapping.WithContext(ctx).Create(&entity.UserRoleChainMapping{
 		UserID:  &userId,
 		ChainID: int32(chain.ID),
 	}); err != nil {
@@ -138,11 +110,7 @@ func AddChain(c context.Context, ctx *app.RequestContext) (*resp.AddChainResp, e
 	return &resp.AddChainResp{}, nil
 }
 
-func DelChain(c context.Context, ctx *app.RequestContext) (*resp.DelChainResp, error) {
-	r := req.DelChainReq{}
-	if err := ctx.BindAndValidate(&r); err != nil {
-		return nil, err
-	}
+func DelChain(ctx context.Context, r *req.DelChainReq) (*resp.DelChainResp, error) {
 	if config.GetRole() == common.Agent.String() {
 		if err := manager.DelPort(r.Port, manager.ChainPortType); err != nil {
 			hlog.Errorf("delete port failed, err: %s", err.Error())
@@ -150,9 +118,9 @@ func DelChain(c context.Context, ctx *app.RequestContext) (*resp.DelChainResp, e
 		}
 		return &resp.DelChainResp{}, nil
 	}
-	if ctx.GetString(common.HeaderRoleKey) != "SUPER_ADMIN" {
-		chainM, err := dal.UserRoleChainMapping.WithContext(c).
-			Where(dal.UserRoleChainMapping.UserID.Eq(ctx.GetInt32(common.HeaderUserKey)), dal.UserRoleChainMapping.ChainID.Eq(int32(r.ID))).
+	if !identity.FromContext(ctx).IsSuperAdmin() {
+		chainM, err := dal.UserRoleChainMapping.WithContext(ctx).
+			Where(dal.UserRoleChainMapping.UserID.Eq(identity.FromContext(ctx).UserID), dal.UserRoleChainMapping.ChainID.Eq(int32(r.ID))).
 			Preload(dal.UserRoleChainMapping.Chain).First()
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -161,11 +129,11 @@ func DelChain(c context.Context, ctx *app.RequestContext) (*resp.DelChainResp, e
 			return nil, err
 		}
 		chain := chainM.Chain
-		cnt, err := dal.Q.Chain.WithContext(c).Where(dal.Chain.NodeID.Eq(chain.NodeID), dal.Chain.Port.Eq(*chain.Port)).Count()
+		cnt, err := dal.Q.Chain.WithContext(ctx).Where(dal.Chain.NodeID.Eq(chain.NodeID), dal.Chain.Port.Eq(*chain.Port)).Count()
 		if err != nil {
 			return nil, err
 		}
-		node, _ := dal.Node.WithContext(c).Where(dal.Node.ID.Eq(chain.NodeID)).First()
+		node, _ := dal.Node.WithContext(ctx).Where(dal.Node.ID.Eq(chain.NodeID)).First()
 		// may ipv4 ipv6 all use one port, so only count == 1, delete port
 		if cnt == 1 {
 			r.Port = *chain.Port
@@ -176,20 +144,20 @@ func DelChain(c context.Context, ctx *app.RequestContext) (*resp.DelChainResp, e
 		} else {
 			return nil, permissionDenyError
 		}
-		_, err = dal.Q.Chain.WithContext(c).Where(dal.Chain.ID.Eq(r.ID)).Delete(&entity.Chain{})
+		_, err = dal.Q.Chain.WithContext(ctx).Where(dal.Chain.ID.Eq(r.ID)).Delete(&entity.Chain{})
 		if err != nil {
 			return nil, err
 		}
-		if _, err := dal.UserRoleChainMapping.WithContext(c).Where(dal.UserRoleChainMapping.UserID.Eq(ctx.GetInt32(common.HeaderUserKey)), dal.UserRoleChainMapping.ChainID.Eq(int32(r.ID))).Delete(&entity.UserRoleChainMapping{}); err != nil {
+		if _, err := dal.UserRoleChainMapping.WithContext(ctx).Where(dal.UserRoleChainMapping.UserID.Eq(identity.FromContext(ctx).UserID), dal.UserRoleChainMapping.ChainID.Eq(int32(r.ID))).Delete(&entity.UserRoleChainMapping{}); err != nil {
 			return nil, err
 		}
 		return &resp.DelChainResp{ChainId: int64(chainM.ChainID)}, nil
 	}
-	chain, err := dal.Q.Chain.WithContext(c).Where(dal.Chain.ID.Eq(r.ID)).Preload(dal.Chain.Node).First()
+	chain, err := dal.Q.Chain.WithContext(ctx).Where(dal.Chain.ID.Eq(r.ID)).Preload(dal.Chain.Node).First()
 	if err != nil {
 		return nil, err
 	}
-	cnt, err := dal.Q.Chain.WithContext(c).Where(dal.Chain.NodeID.Eq(chain.NodeID), dal.Chain.Port.Eq(*chain.Port)).Count()
+	cnt, err := dal.Q.Chain.WithContext(ctx).Where(dal.Chain.NodeID.Eq(chain.NodeID), dal.Chain.Port.Eq(*chain.Port)).Count()
 	if err != nil {
 		return nil, err
 	}
@@ -201,11 +169,11 @@ func DelChain(c context.Context, ctx *app.RequestContext) (*resp.DelChainResp, e
 			return nil, err
 		}
 	}
-	_, err = dal.Q.Chain.WithContext(c).Where(dal.Chain.ID.Eq(r.ID)).Delete(&entity.Chain{})
+	_, err = dal.Q.Chain.WithContext(ctx).Where(dal.Chain.ID.Eq(r.ID)).Delete(&entity.Chain{})
 	if err != nil {
 		return nil, err
 	}
-	_, err = dal.UserRoleChainMapping.WithContext(c).Where(dal.UserRoleChainMapping.ChainID.Eq(int32(r.ID))).Delete(&entity.UserRoleChainMapping{})
+	_, err = dal.UserRoleChainMapping.WithContext(ctx).Where(dal.UserRoleChainMapping.ChainID.Eq(int32(r.ID))).Delete(&entity.UserRoleChainMapping{})
 	if err != nil {
 		return nil, err
 	}
@@ -213,25 +181,21 @@ func DelChain(c context.Context, ctx *app.RequestContext) (*resp.DelChainResp, e
 	return &resp.DelChainResp{ChainId: chain.ID}, nil
 }
 
-func ListChain(c context.Context, ctx *app.RequestContext) (*resp.ListChainResp, error) {
-	req := req.ListChainReq{}
-	if err := ctx.BindAndValidate(&req); err != nil {
-		return nil, err
-	}
+func ListChain(ctx context.Context, req *req.ListChainReq) (*resp.ListChainResp, error) {
 
 	if config.GetRole() == string(common.Agent) {
 		return &resp.ListChainResp{}, nil
 	}
 
 	var chainIds []int64
-	if err := dal.UserRoleChainMapping.WithContext(c).Select(dal.UserRoleChainMapping.ChainID).
-		Where(dal.UserRoleChainMapping.UserID.Eq(ctx.GetInt32(common.HeaderUserKey))).
-		Or(dal.UserRoleChainMapping.RoleCode.Eq(ctx.GetString(common.HeaderRoleKey))).Scan(&chainIds); err != nil {
+	if err := dal.UserRoleChainMapping.WithContext(ctx).Select(dal.UserRoleChainMapping.ChainID).
+		Where(dal.UserRoleChainMapping.UserID.Eq(identity.FromContext(ctx).UserID)).
+		Or(dal.UserRoleChainMapping.RoleCode.Eq(identity.FromContext(ctx).RoleCode)).Scan(&chainIds); err != nil {
 		return nil, err
 	}
 
 	var q []gen.Condition
-	if ctx.GetString(common.HeaderRoleKey) != "SUPER_ADMIN" {
+	if !identity.FromContext(ctx).IsSuperAdmin() {
 		q = append(q, dal.Chain.ID.In(chainIds...))
 	}
 	if req.Protocol != "" {
@@ -249,7 +213,7 @@ func ListChain(c context.Context, ctx *app.RequestContext) (*resp.ListChainResp,
 	if req.PageNo == -1 {
 		req.PageSize = 1000
 	}
-	chains, cnt, err := dal.Chain.WithContext(c).
+	chains, cnt, err := dal.Chain.WithContext(ctx).
 		Where(q...).Preload(dal.Chain.Node).Order(dal.Chain.UpdatedAt.Desc()).FindByPage(int((req.PageNo-1)*req.PageSize), int(req.PageSize))
 	if err != nil {
 		return nil, err
@@ -258,16 +222,12 @@ func ListChain(c context.Context, ctx *app.RequestContext) (*resp.ListChainResp,
 	return &resp.ListChainResp{Chains: chains, TotalCount: cnt}, nil
 }
 
-func EditChain(ctx context.Context, c *app.RequestContext) (*resp.EditChainResp, error) {
-	r := req.EditChainReq{}
-	if err := c.BindAndValidate(&r); err != nil {
-		return nil, err
-	}
+func EditChain(ctx context.Context, r *req.EditChainReq) (*resp.EditChainResp, error) {
 
 	if config.GetRole() == string(common.Agent) {
 		return &resp.EditChainResp{}, nil
 	}
-	if err := checkUserChainPermission(ctx, c, r.ID); err != nil {
+	if err := checkUserChainPermission(ctx, r.ID); err != nil {
 		return nil, err
 	}
 	_, err := dal.Chain.WithContext(ctx).Where(dal.Chain.ID.Eq(r.ID)).Update(dal.Chain.ChainName, r.ChainName)
@@ -277,19 +237,15 @@ func EditChain(ctx context.Context, c *app.RequestContext) (*resp.EditChainResp,
 	return &resp.EditChainResp{}, nil
 }
 
-func GetChainPermissions(ctx context.Context, c *app.RequestContext) ([]int64, error) {
-	r := req.EmptyReq{}
-	if err := c.BindAndValidate(&r); err != nil {
-		return nil, err
-	}
+func GetChainPermissions(ctx context.Context, r *req.EmptyReq) ([]int64, error) {
 	var availableChainIds []int64
-	if c.GetString(common.HeaderRoleKey) == common.SUPER_ADMIN {
+	if identity.FromContext(ctx).IsSuperAdmin() {
 		if err := dal.Chain.WithContext(ctx).Select(dal.Chain.ID).Scan(&availableChainIds); err != nil {
 			return nil, err
 		}
 	} else {
 		if err := dal.UserRoleChainMapping.WithContext(ctx).Select(dal.UserRoleChainMapping.ChainID).
-			Where(dal.UserRoleChainMapping.UserID.Eq(c.GetInt32(common.HeaderUserKey))).
+			Where(dal.UserRoleChainMapping.UserID.Eq(identity.FromContext(ctx).UserID)).
 			Scan(&availableChainIds); err != nil {
 			return nil, err
 		}

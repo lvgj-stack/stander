@@ -16,14 +16,14 @@ func (standerUser) Handle(c context.Context, ctx *app.RequestContext) {
 	action := ctx.Query("Action")
 	switch action {
 	case "GetUserPlanInfo":
-		res, err := service.GetUserPlanInfo(c, ctx)
+		res, err := call(c, ctx, service.GetUserPlanInfo)
 		if err != nil {
 			Resp.Err(ctx, 20001, err.Error())
 			return
 		}
 		Resp.Succ(ctx, res)
 	case "ListUsers":
-		res, err := service.ListUsers(c, ctx)
+		res, err := call(c, ctx, service.ListUsers)
 		if err != nil {
 			Resp.Err(ctx, 20001, err.Error())
 			return
@@ -33,7 +33,7 @@ func (standerUser) Handle(c context.Context, ctx *app.RequestContext) {
 			"total":    res.TotalCount,
 		})
 	case "EditUser":
-		if _, err := service.EditUser(c, ctx); err != nil {
+		if _, err := call(c, ctx, service.EditUser); err != nil {
 			Resp.Err(ctx, 20001, err.Error())
 			return
 		}

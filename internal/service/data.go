@@ -9,16 +9,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/common/hlog"
 	"gorm.io/gorm/clause"
 
 	"github.com/lvgj-stack/stander/internal/client"
-	"github.com/lvgj-stack/stander/internal/common"
 	"github.com/lvgj-stack/stander/internal/config"
+	"github.com/lvgj-stack/stander/internal/identity"
 	"github.com/lvgj-stack/stander/internal/model/dal"
 	"github.com/lvgj-stack/stander/internal/model/entity"
-	error2 "github.com/lvgj-stack/stander/internal/service/error"
 	"github.com/lvgj-stack/stander/internal/service/req"
 	"github.com/lvgj-stack/stander/internal/service/resp"
 	"github.com/lvgj-stack/stander/internal/utils/cron"
@@ -27,26 +25,7 @@ import (
 var userPlanUsageMap = sync.Map{}
 var nodeTrafficMap = sync.Map{}
 
-func DataSrv(c context.Context, ctx *app.RequestContext) {
-	action := ctx.Query("Action")
-	switch action {
-	case "ReportNetworkTraffic":
-		resp, err := ReportNetworkTraffic(c, ctx)
-		error2.WriteResponse(ctx, err, resp)
-	case "ObserverNetworkTraffic":
-		_, _ = ObserverNetworkTraffic(c, ctx)
-		ctx.JSON(200, map[string]bool{"ok": true})
-	default:
-		error2.WriteResponse(ctx, errors.New("action not found"), nil)
-	}
-}
-
-func ObserverNetworkTraffic(ctx context.Context, c *app.RequestContext) (*resp.ReportNetworkTrafficResp, error) {
-	r := req.ObserverNetworkTrafficReq{}
-	if err := c.BindAndValidate(&r); err != nil {
-		hlog.Errorf("[ObserverNetworkTraffic] err: %v", err)
-		return nil, err
-	}
+func ObserverNetworkTraffic(ctx context.Context, r *req.ObserverNetworkTrafficReq) (*resp.ReportNetworkTrafficResp, error) {
 	hlog.Infof("[ObserverNetworkTraffic] req: %v", r)
 
 	cfg := config.GetAgentConfig()
@@ -75,12 +54,8 @@ func ObserverNetworkTraffic(ctx context.Context, c *app.RequestContext) (*resp.R
 	return &resp.ReportNetworkTrafficResp{}, nil
 }
 
-func ReportNetworkTraffic(ctx context.Context, c *app.RequestContext) (*resp.ReportNetworkTrafficResp, error) {
-	r := req.ReportNetworkTrafficReq{}
-	if err := c.BindAndValidate(&r); err != nil {
-		return nil, err
-	}
-	k := string(c.GetHeader(common.KeyHeader))
+func ReportNetworkTraffic(ctx context.Context, r *req.ReportNetworkTrafficReq) (*resp.ReportNetworkTrafficResp, error) {
+	k := identity.FromContext(ctx).NodeKey
 	if k == "" {
 		return nil, errors.New("header key not found")
 	}

@@ -23,7 +23,7 @@ func (chainGroup) Handle(c context.Context, ctx *app.RequestContext) {
 	action := ctx.Query("Action")
 	switch action {
 	case "ListChainGroups":
-		res, err := service.ListChainGroup(c, ctx)
+		res, err := call(c, ctx, service.ListChainGroup)
 		if err != nil {
 			Resp.Err(ctx, 20001, err.Error())
 			return
@@ -33,27 +33,27 @@ func (chainGroup) Handle(c context.Context, ctx *app.RequestContext) {
 			"total":    0,
 		})
 	case "AddChainGroup":
-		res, err := service.AddChainGroup(c, ctx)
+		res, err := call(c, ctx, service.AddChainGroup)
 		if err != nil {
 			Resp.Err(ctx, 20001, err.Error())
 			return
 		}
 		Resp.Succ(ctx, res)
 	case "DeleteChainGroup":
-		res, err := service.DelChainGroup(c, ctx)
+		res, err := call(c, ctx, service.DelChainGroup)
 		if err != nil {
 			Resp.Err(ctx, 20001, err.Error())
 			return
 		}
 		Resp.Succ(ctx, res)
 	case "EditChainGroup":
-		if _, err := service.EditChainGroup(c, ctx); err != nil {
+		if _, err := call(c, ctx, service.EditChainGroup); err != nil {
 			Resp.Err(ctx, 20001, err.Error())
 			return
 		}
 		Resp.Succ(ctx, nil)
 	case "EditChain":
-		if _, err := service.EditChain(c, ctx); err != nil {
+		if _, err := call(c, ctx, service.EditChain); err != nil {
 			Resp.Err(ctx, 20001, err.Error())
 			return
 		}

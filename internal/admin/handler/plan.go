@@ -16,14 +16,14 @@ func (plan) Handle(c context.Context, ctx *app.RequestContext) {
 	action := ctx.Query("Action")
 	switch action {
 	case "ListPlans":
-		res, err := service.ListPlans(c, ctx)
+		res, err := call(c, ctx, service.ListPlans)
 		if err != nil {
 			Resp.Err(ctx, 20001, err.Error())
 			return
 		}
 		Resp.Succ(ctx, res)
 	case "AssociatePlan":
-		res, err := service.AssociatePlans(c, ctx)
+		res, err := call(c, ctx, service.AssociatePlan)
 		if err != nil {
 			Resp.Err(ctx, 20001, err.Error())
 			return

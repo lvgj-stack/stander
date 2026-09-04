@@ -6,7 +6,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 
 	"github.com/lvgj-stack/stander/internal/admin/handler"
-	"github.com/lvgj-stack/stander/internal/common"
+	"github.com/lvgj-stack/stander/internal/identity"
 	"github.com/lvgj-stack/stander/internal/utils"
 )
 
@@ -40,13 +40,15 @@ func Jwt() app.HandlerFunc {
 			return
 		}
 
+		// The admin handlers still read these off the request context.
 		ctx.Set("uid", claims.UID)
 		ctx.Set("roleId", claims.CurrentRoleCode)
 		ctx.Set("jwt_token", claims)
 
-		ctx.Set(common.HeaderUserKey, int32(claims.UID))
-		ctx.Set(common.HeaderRoleKey, claims.CurrentRoleCode)
-
-		ctx.Next(c)
+		// The service layer reads the caller off the standard context instead.
+		ctx.Next(identity.NewContext(c, identity.Principal{
+			UserID:   int32(claims.UID),
+			RoleCode: claims.CurrentRoleCode,
+		}))
 	}
 }

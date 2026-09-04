@@ -16,7 +16,7 @@ func (chain) Handle(c context.Context, ctx *app.RequestContext) {
 	action := ctx.Query("Action")
 	switch action {
 	case "ListChains":
-		res, err := service.ListChain(c, ctx)
+		res, err := call(c, ctx, service.ListChain)
 		if err != nil {
 			Resp.Err(ctx, 20001, err.Error())
 			return
@@ -26,27 +26,27 @@ func (chain) Handle(c context.Context, ctx *app.RequestContext) {
 			"total":    res.TotalCount,
 		})
 	case "AddChain":
-		res, err := service.AddChain(c, ctx)
+		res, err := call(c, ctx, service.AddChain)
 		if err != nil {
 			Resp.Err(ctx, 20001, err.Error())
 			return
 		}
 		Resp.Succ(ctx, res)
 	case "DeleteChain":
-		res, err := service.DelChain(c, ctx)
+		res, err := call(c, ctx, service.DelChain)
 		if err != nil {
 			Resp.Err(ctx, 20001, err.Error())
 			return
 		}
 		Resp.Succ(ctx, res)
 	case "EditChain":
-		if _, err := service.EditChain(c, ctx); err != nil {
+		if _, err := call(c, ctx, service.EditChain); err != nil {
 			Resp.Err(ctx, 20001, err.Error())
 			return
 		}
 		Resp.Succ(ctx, nil)
 	case "GetChainPermissions":
-		res, err := service.GetChainPermissions(c, ctx)
+		res, err := call(c, ctx, service.GetChainPermissions)
 		if err != nil {
 			Resp.Err(ctx, 20001, err.Error())
 			return

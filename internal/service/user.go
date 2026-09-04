@@ -2,42 +2,17 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
-	"github.com/cloudwego/hertz/pkg/app"
 	"gorm.io/gen"
 
 	"github.com/lvgj-stack/stander/internal/model/dal"
-	error2 "github.com/lvgj-stack/stander/internal/service/error"
 	"github.com/lvgj-stack/stander/internal/service/req"
 	"github.com/lvgj-stack/stander/internal/service/resp"
 )
 
-func UserSrv(c context.Context, ctx *app.RequestContext) {
-	action := ctx.Query("Action")
-	switch action {
-	case "GetUserPlanInfo":
-		resp, err := GetUserPlanInfo(c, ctx)
-		error2.WriteResponse(ctx, err, resp)
-	case "ListUsers":
-		resp, err := ListUsers(c, ctx)
-		error2.WriteResponse(ctx, err, resp)
-	case "EditUser":
-		resp, err := EditUser(c, ctx)
-		error2.WriteResponse(ctx, err, resp)
-
-	default:
-		error2.WriteResponse(ctx, errors.New("action not found"), nil)
-	}
-}
-
-func GetUserPlanInfo(ctx context.Context, c *app.RequestContext) (*resp.GetUserPlanInfoResp, error) {
-	r := req.GetUserPlanInfoReq{}
-	if err := c.BindAndValidate(&r); err != nil {
-		return nil, err
-	}
+func GetUserPlanInfo(ctx context.Context, r *req.GetUserPlanInfoReq) (*resp.GetUserPlanInfoResp, error) {
 	user, err := dal.User.WithContext(ctx).Where(dal.User.ID.Eq(r.UserId)).Preload(dal.User.TrafficPlan).First()
 	if err != nil {
 		return nil, err
@@ -88,11 +63,7 @@ func GetUserPlanInfo(ctx context.Context, c *app.RequestContext) (*resp.GetUserP
 	}, nil
 }
 
-func ListUsers(ctx context.Context, c *app.RequestContext) (*resp.ListUsersResp, error) {
-	r := req.ListUsersReq{}
-	if err := c.BindAndValidate(&r); err != nil {
-		return nil, err
-	}
+func ListUsers(ctx context.Context, r *req.ListUsersReq) (*resp.ListUsersResp, error) {
 	var q []gen.Condition
 
 	if r.Username != "" {
@@ -139,11 +110,7 @@ func ListUsers(ctx context.Context, c *app.RequestContext) (*resp.ListUsersResp,
 	}, nil
 }
 
-func EditUser(ctx context.Context, c *app.RequestContext) (*resp.EmptyResp, error) {
-	r := req.EditUserReq{}
-	if err := c.BindAndValidate(&r); err != nil {
-		return nil, err
-	}
+func EditUser(ctx context.Context, r *req.EditUserReq) (*resp.EmptyResp, error) {
 	updatedFields := make(map[string]any)
 	if r.ExpirationTime != nil {
 		updatedFields["expiration_time"] = r.ExpirationTime

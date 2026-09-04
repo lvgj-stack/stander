@@ -2,43 +2,16 @@ package service
 
 import (
 	"context"
-	"errors"
 	"time"
-
-	"github.com/cloudwego/hertz/pkg/app"
 
 	"github.com/lvgj-stack/stander/internal/model/dal"
 	"github.com/lvgj-stack/stander/internal/model/entity"
-	error2 "github.com/lvgj-stack/stander/internal/service/error"
 	"github.com/lvgj-stack/stander/internal/service/req"
 	"github.com/lvgj-stack/stander/internal/service/resp"
 )
 
-func PlanSrv(c context.Context, ctx *app.RequestContext) {
-	action := ctx.Query("Action")
-	switch action {
-	case "ListPlans":
-		resp, err := ListPlans(c, ctx)
-		error2.WriteResponse(ctx, err, resp)
-	case "AssociatePlan":
-		resp, err := AssociatePlans(c, ctx)
-		error2.WriteResponse(ctx, err, resp)
-	default:
-		error2.WriteResponse(ctx, errors.New("action not found"), nil)
-	}
-}
-
-func AssociatePlans(ctx context.Context, c *app.RequestContext) (*resp.EmptyResp, error) {
-	r := req.AssociatePlanReq{}
-	if err := c.BindAndValidate(&r); err != nil {
-		return nil, err
-	}
-	return AssociatePlan(ctx, &r)
-}
-
-// AssociatePlan is the request-context-free core of AssociatePlans. The admin
-// console calls it directly when creating a user, where the plan association is
-// derived from the create-user payload rather than from its own request body.
+// AssociatePlan attaches a traffic plan to a user and moves the expiry and
+// traffic-reset marks forward by the plan's period.
 func AssociatePlan(ctx context.Context, r *req.AssociatePlanReq) (*resp.EmptyResp, error) {
 	plan, err := dal.TrafficPlan.WithContext(ctx).Where(dal.TrafficPlan.ID.Eq(r.PlanId)).First()
 	if err != nil {
@@ -67,11 +40,7 @@ func AssociatePlan(ctx context.Context, r *req.AssociatePlanReq) (*resp.EmptyRes
 	return &resp.EmptyResp{}, nil
 }
 
-func ListPlans(ctx context.Context, c *app.RequestContext) (*resp.ListPlansResp, error) {
-	r := req.ListPlansReq{}
-	if err := c.BindAndValidate(&r); err != nil {
-		return nil, err
-	}
+func ListPlans(ctx context.Context, r *req.ListPlansReq) (*resp.ListPlansResp, error) {
 
 	plans, err := dal.TrafficPlan.WithContext(ctx).Find()
 	if err != nil {

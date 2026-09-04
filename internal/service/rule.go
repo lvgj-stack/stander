@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/common/hlog"
 	"gorm.io/gen"
 	"gorm.io/gorm"
@@ -17,45 +16,15 @@ import (
 	"github.com/lvgj-stack/stander/internal/common"
 	"github.com/lvgj-stack/stander/internal/config"
 	"github.com/lvgj-stack/stander/internal/forward/manager"
+	"github.com/lvgj-stack/stander/internal/identity"
 	"github.com/lvgj-stack/stander/internal/model/dal"
 	"github.com/lvgj-stack/stander/internal/model/entity"
-	error2 "github.com/lvgj-stack/stander/internal/service/error"
 	req2 "github.com/lvgj-stack/stander/internal/service/req"
 	"github.com/lvgj-stack/stander/internal/service/resp"
 	"github.com/lvgj-stack/stander/internal/utils"
 )
 
-func RuleSrv(c context.Context, ctx *app.RequestContext) {
-	action := ctx.Query("Action")
-	switch action {
-	case "AddRule":
-		rule, err := AddRule(c, ctx)
-		error2.WriteResponse(ctx, err, rule)
-	case "DeleteRule":
-		rule, err := DelRule(c, ctx)
-		error2.WriteResponse(ctx, err, rule)
-	case "ListRules":
-		rule, err := ListRule(c, ctx)
-		error2.WriteResponse(ctx, err, rule)
-	case "ModifyRule":
-		rule, err := ModifyRule(c, ctx)
-		error2.WriteResponse(ctx, err, rule)
-	case "ModifyRules":
-		rule, err := ModifyRules(c, ctx)
-		error2.WriteResponse(ctx, err, rule)
-	case "TestRule":
-		rule, err := TestRule(c, ctx)
-		error2.WriteResponse(ctx, err, rule)
-	default:
-		error2.WriteResponse(ctx, errors.New("action not found"), nil)
-	}
-}
-
-func TestRule(ctx context.Context, c *app.RequestContext) (*resp.TestRuleResp, error) {
-	req := req2.TestRuleReq{}
-	if err := c.BindAndValidate(&req); err != nil {
-		return nil, err
-	}
+func TestRule(ctx context.Context, req *req2.TestRuleReq) (*resp.TestRuleResp, error) {
 	if config.GetRole() == string(common.Agent) {
 		ping, err := utils.HandleTcpping(req.Destination)
 		if err != nil {
@@ -133,11 +102,7 @@ func TestRule(ctx context.Context, c *app.RequestContext) (*resp.TestRuleResp, e
 	return res, nil
 }
 
-func AddRule(c context.Context, ctx *app.RequestContext) (*resp.AddRuleResp, error) {
-	req := req2.AddRuleReq{}
-	if err := ctx.BindAndValidate(&req); err != nil {
-		return nil, err
-	}
+func AddRule(ctx context.Context, req *req2.AddRuleReq) (*resp.AddRuleResp, error) {
 	if req.ChainType == "" {
 		req.ChainType = string(common.TCPConnector)
 	}
@@ -149,9 +114,9 @@ func AddRule(c context.Context, ctx *app.RequestContext) (*resp.AddRuleResp, err
 		}
 		return &resp.AddRuleResp{}, nil
 	}
-	uid := ctx.GetInt32(common.HeaderUserKey)
+	uid := identity.FromContext(ctx).UserID
 
-	chain, err := dal.Q.Chain.WithContext(c).Where(dal.Chain.ID.Eq(req.ChainId)).First()
+	chain, err := dal.Q.Chain.WithContext(ctx).Where(dal.Chain.ID.Eq(req.ChainId)).First()
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
@@ -159,7 +124,7 @@ func AddRule(c context.Context, ctx *app.RequestContext) (*resp.AddRuleResp, err
 		req.ChainAddr = utils.GenIpAndPort(*chain.IP, *chain.Port)
 	}
 	hlog.Infof("add direct forward, listen port: %d, raddr: %s", req.ListenPort, req.RemoteAddr)
-	node, err := dal.Q.Node.WithContext(c).Where(dal.Node.ID.Eq(req.NodeId)).First()
+	node, err := dal.Q.Node.WithContext(ctx).Where(dal.Node.ID.Eq(req.NodeId)).First()
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +132,7 @@ func AddRule(c context.Context, ctx *app.RequestContext) (*resp.AddRuleResp, err
 	if err != nil {
 		return nil, err
 	}
-	if err := dal.Q.Rule.WithContext(c).Create(&entity.Rule{
+	if err := dal.Q.Rule.WithContext(ctx).Create(&entity.Rule{
 		RuleName:   &req.RuleName,
 		ListenPort: &req.ListenPort,
 		RemoteAddr: &req.RemoteAddr,
@@ -184,11 +149,7 @@ func AddRule(c context.Context, ctx *app.RequestContext) (*resp.AddRuleResp, err
 	return &resp.AddRuleResp{}, nil
 }
 
-func DelRule(c context.Context, ctx *app.RequestContext) (*resp.DelRuleResp, error) {
-	req := req2.DelRuleReq{}
-	if err := ctx.BindAndValidate(&req); err != nil {
-		return nil, err
-	}
+func DelRule(ctx context.Context, req *req2.DelRuleReq) (*resp.DelRuleResp, error) {
 
 	if config.GetRole() == string(common.Agent) {
 		hlog.Infof("del rule, port: %d", req.Port)
@@ -198,23 +159,23 @@ func DelRule(c context.Context, ctx *app.RequestContext) (*resp.DelRuleResp, err
 		return &resp.DelRuleResp{}, nil
 	}
 
-	uid := ctx.GetInt32(common.HeaderUserKey)
-	if ctx.GetString(common.HeaderRoleKey) != "SUPER_ADMIN" {
-		_, err := dal.Rule.WithContext(c).Where(dal.Rule.UserID.Eq(uid), dal.Rule.ID.Eq(req.ID)).First()
+	uid := identity.FromContext(ctx).UserID
+	if !identity.FromContext(ctx).IsSuperAdmin() {
+		_, err := dal.Rule.WithContext(ctx).Where(dal.Rule.UserID.Eq(uid), dal.Rule.ID.Eq(req.ID)).First()
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	rule, err := dal.Rule.WithContext(c).Where(dal.Rule.ID.Eq(req.ID)).First()
+	rule, err := dal.Rule.WithContext(ctx).Where(dal.Rule.ID.Eq(req.ID)).First()
 	if err != nil {
 		return nil, err
 	}
 
-	node, err := dal.Q.Node.WithContext(c).Where(dal.Node.ID.Eq(*rule.NodeID)).First()
+	node, err := dal.Q.Node.WithContext(ctx).Where(dal.Node.ID.Eq(*rule.NodeID)).First()
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			if _, err := dal.Q.Rule.WithContext(c).Where(dal.Rule.ID.Eq(req.ID)).Delete(&entity.Rule{}); err != nil {
+			if _, err := dal.Q.Rule.WithContext(ctx).Where(dal.Rule.ID.Eq(req.ID)).Delete(&entity.Rule{}); err != nil {
 				return nil, err
 			}
 			return &resp.DelRuleResp{RuleId: req.ID}, nil
@@ -230,25 +191,21 @@ func DelRule(c context.Context, ctx *app.RequestContext) (*resp.DelRuleResp, err
 			return nil, err
 		}
 	}
-	if _, err := dal.Q.Rule.WithContext(c).Where(dal.Rule.ID.Eq(req.ID)).Delete(&entity.Rule{}); err != nil {
+	if _, err := dal.Q.Rule.WithContext(ctx).Where(dal.Rule.ID.Eq(req.ID)).Delete(&entity.Rule{}); err != nil {
 		return nil, err
 	}
 	return &resp.DelRuleResp{RuleId: req.ID}, nil
 }
 
-func ListRule(c context.Context, ctx *app.RequestContext) (*resp.ListRuleResp, error) {
-	req := req2.ListRuleReq{}
-	if err := ctx.BindAndValidate(&req); err != nil {
-		return nil, err
-	}
+func ListRule(ctx context.Context, req *req2.ListRuleReq) (*resp.ListRuleResp, error) {
 
 	if config.GetRole() == string(common.Agent) {
 		return &resp.ListRuleResp{}, nil
 	}
-	uid := ctx.GetInt32(common.HeaderUserKey)
+	uid := identity.FromContext(ctx).UserID
 
 	var q []gen.Condition
-	if ctx.GetString(common.HeaderRoleKey) != "SUPER_ADMIN" {
+	if !identity.FromContext(ctx).IsSuperAdmin() {
 		q = append(q, dal.Rule.UserID.Eq(uid))
 	}
 	if req.RuleName != "" {
@@ -276,7 +233,7 @@ func ListRule(c context.Context, ctx *app.RequestContext) (*resp.ListRuleResp, e
 			}
 		}
 	}
-	rules, cnt, err := dal.Rule.WithContext(c).Where(q...).
+	rules, cnt, err := dal.Rule.WithContext(ctx).Where(q...).
 		Preload(dal.Rule.Node, dal.Rule.Chain).
 		Order(od).
 		FindByPage(int((req.PageNo-1)*req.PageSize), int(req.PageSize))
@@ -287,11 +244,7 @@ func ListRule(c context.Context, ctx *app.RequestContext) (*resp.ListRuleResp, e
 	return &resp.ListRuleResp{Rules: rules, TotalCount: cnt}, nil
 }
 
-func ModifyRule(ctx context.Context, c *app.RequestContext) (*resp.ModifyRuleResp, error) {
-	req := req2.ModifyRuleReq{}
-	if err := c.BindAndValidate(&req); err != nil {
-		return nil, err
-	}
+func ModifyRule(ctx context.Context, req *req2.ModifyRuleReq) (*resp.ModifyRuleResp, error) {
 
 	var needCallAgent bool
 
@@ -363,11 +316,7 @@ func ModifyRule(ctx context.Context, c *app.RequestContext) (*resp.ModifyRuleRes
 	return &resp.ModifyRuleResp{}, nil
 }
 
-func ModifyRules(ctx context.Context, c *app.RequestContext) (*resp.EmptyResp, error) {
-	req := req2.ModifyRulesReq{}
-	if err := c.BindAndValidate(&req); err != nil {
-		return nil, err
-	}
+func ModifyRules(ctx context.Context, req *req2.ModifyRulesReq) (*resp.EmptyResp, error) {
 
 	rules, err := dal.Rule.WithContext(ctx).Where(dal.Rule.ID.In(req.RuleIDs...)).Preload(dal.Rule.Node, dal.Rule.Chain).Find()
 	if err != nil {

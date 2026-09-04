@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/cloudwego/hertz/pkg/app"
@@ -52,4 +53,18 @@ func deref[T any](p *T) T {
 		return zero
 	}
 	return *p
+}
+
+// call binds the request body into T and invokes a service action with it.
+//
+// The service layer no longer takes a *app.RequestContext, so binding is the
+// caller's job. Keeping it in one generic helper means each action case stays a
+// single line and the bind error is reported the same way everywhere.
+func call[T, R any](c context.Context, ctx *app.RequestContext, action func(context.Context, *T) (R, error)) (R, error) {
+	var r T
+	if err := ctx.BindAndValidate(&r); err != nil {
+		var zero R
+		return zero, err
+	}
+	return action(c, &r)
 }
