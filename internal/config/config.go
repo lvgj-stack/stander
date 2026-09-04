@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -64,7 +65,7 @@ func (r Relay) String() string {
 	return r.Name + "#" + r.Src + "#" + r.Chain + "#" + r.RAddr
 }
 
-func InitConfig(configPath string) *Config {
+func InitConfig(configPath string) (*Config, error) {
 	c = &Config{}
 	viper.SetConfigFile(configPath)
 
@@ -75,13 +76,13 @@ func InitConfig(configPath string) *Config {
 	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err != nil {
-		panic(err)
+		return nil, fmt.Errorf("read config %s: %w", configPath, err)
 	}
 	if err := viper.Unmarshal(&c); err != nil {
-		panic(err)
+		return nil, fmt.Errorf("parse config %s: %w", configPath, err)
 	}
 	applyDefaults(c)
-	return c
+	return c, nil
 }
 
 func applyDefaults(c *Config) {

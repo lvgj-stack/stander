@@ -22,7 +22,10 @@ var genCmd = &cobra.Command{
 	Short: "\u4ece\u6570\u636e\u5e93\u751f\u6210 gorm-gen \u4ee3\u7801",
 	Long:  "\u8fde\u63a5\u914d\u7f6e\u6587\u4ef6\u91cc\u7684\u6570\u636e\u5e93\uff0c\u91cd\u65b0\u751f\u6210 internal/model \u4e0b\u7684 entity \u4e0e dal \u4ee3\u7801\u3002",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c := config.InitConfig(configPath)
+		c, err := config.InitConfig(configPath)
+		if err != nil {
+			return err
+		}
 		if err := db.Init(c.Database); err != nil {
 			return err
 		}
