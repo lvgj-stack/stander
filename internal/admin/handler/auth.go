@@ -1,0 +1,134 @@
+package handler
+
+import (
+	"context"
+	"crypto/md5"
+	"encoding/base64"
+	"fmt"
+	"net/http"
+	"strings"
+
+	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/hertz-contrib/sessions"
+
+	"github.com/lvgj-stack/stander/internal/admin/inout"
+	"github.com/lvgj-stack/stander/internal/admin/model"
+	"github.com/lvgj-stack/stander/internal/db"
+	"github.com/lvgj-stack/stander/internal/utils"
+)
+
+var Auth = &auth{}
+
+type auth struct{}
+
+func (auth) Captcha(c context.Context, ctx *app.RequestContext) {
+	id, b64s, err := utils.GetCaptcha()
+	if err != nil {
+		Resp.Err(ctx, 20001, err.Error())
+		return
+	}
+	session := sessions.Default(ctx)
+	session.Set("captch", id)
+	if err := session.Save(); err != nil {
+		Resp.Err(ctx, 20001, err.Error())
+		return
+	}
+
+	parts := strings.SplitN(b64s, ",", 2)
+	if len(parts) != 2 {
+		Resp.Err(ctx, 20001, "malformed captcha payload")
+		return
+	}
+	imgData, err := base64.StdEncoding.DecodeString(parts[1])
+	if err != nil {
+		Resp.Err(ctx, 20001, err.Error())
+		return
+	}
+
+	ctx.Header("Content-Type", parts[0])
+	ctx.Data(http.StatusOK, parts[0], imgData)
+}
+
+func (auth) Login(c context.Context, ctx *app.RequestContext) {
+	var params inout.LoginReq
+	if err := ctx.BindAndValidate(&params); err != nil {
+		Resp.Err(ctx, 20001, err.Error())
+		return
+	}
+
+	session := sessions.Default(ctx)
+	captchaID, ok := session.Get("captch").(string)
+	if !ok || !utils.VerifyCaptcha(captchaID, strings.ToLower(params.Captcha)) {
+		Resp.Err(ctx, 20001, "验证码不正确")
+		return
+	}
+
+	var info *model.User
+	db.Dao.Model(model.User{}).
+		Where("username =? ", params.Username).
+		Where("password=?", fmt.Sprintf("%x", md5.Sum([]byte(params.Password)))).
+		Find(&info)
+	if info.ID == 0 {
+		Resp.Err(ctx, 20001, "账号或密码不正确")
+		return
+	}
+
+	var roleIds, roleNames []string
+	db.Dao.Model(model.UserRolesRole{}).
+		Where("userId = ?", info.ID).
+		Select("roleId").Find(&roleIds)
+	db.Dao.Model(model.Role{}).
+		Where("id in (?)", roleIds).Order("id asc").
+		Select("code").Find(&roleNames)
+
+	currentRole := ""
+	if len(roleNames) > 0 {
+		currentRole = roleNames[0]
+	}
+	Resp.Succ(ctx, inout.LoginRes{
+		AccessToken: utils.GenerateToken(info.ID, info.ID, info.Username, currentRole, roleNames),
+	})
+}
+
+func (auth) Password(c context.Context, ctx *app.RequestContext) {
+	var params inout.AuthPwReq
+	if err := ctx.BindAndValidate(&params); err != nil {
+		Resp.Err(ctx, 20001, err.Error())
+		return
+	}
+	uid, _ := ctx.Get("uid")
+
+	var matched int64
+	db.Dao.Model(model.User{}).
+		Where("id=? and password=?", uid, fmt.Sprintf("%x", md5.Sum([]byte(params.OldPassword)))).
+		Count(&matched)
+	if matched == 0 {
+		Resp.Err(ctx, 20001, "旧密码不正确")
+		return
+	}
+	if err := db.Dao.Model(model.User{}).
+		Where("id=? ", uid).
+		Update("password", fmt.Sprintf("%x", md5.Sum([]byte(params.NewPassword)))).Error; err != nil {
+		Resp.Err(ctx, 20001, err.Error())
+		return
+	}
+	Resp.Succ(ctx, true)
+}
+
+func (auth) Logout(c context.Context, ctx *app.RequestContext) {
+	Resp.Succ(ctx, true)
+}
+
+func (auth) SwitchRole(c context.Context, ctx *app.RequestContext) {
+	roleName := ctx.Param("role")
+	jwtToken, _ := ctx.Get("jwt_token")
+	claim, ok := jwtToken.(*utils.CustomClaims)
+	if !ok {
+		Resp.Err(ctx, 401, "无效的登录态")
+		return
+	}
+	claim.CurrentRoleCode = roleName
+	Resp.Succ(ctx, inout.LoginRes{
+		AccessToken: utils.GenerateToken(claim.UID, claim.UID, claim.Username, roleName, claim.RoleCodes),
+	})
+}

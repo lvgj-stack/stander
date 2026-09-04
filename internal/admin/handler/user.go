@@ -1,0 +1,219 @@
+package handler
+
+import (
+	"context"
+	"crypto/md5"
+	"fmt"
+	"strconv"
+	"time"
+
+	"github.com/cloudwego/hertz/pkg/app"
+	"gorm.io/gorm"
+
+	"github.com/lvgj-stack/stander/internal/admin/inout"
+	"github.com/lvgj-stack/stander/internal/admin/model"
+	"github.com/lvgj-stack/stander/internal/db"
+	"github.com/lvgj-stack/stander/internal/service"
+	standerreq "github.com/lvgj-stack/stander/internal/service/req"
+	"github.com/lvgj-stack/stander/internal/utils"
+)
+
+var User = &user{}
+
+type user struct{}
+
+func (user) Detail(c context.Context, ctx *app.RequestContext) {
+	var data = &inout.UserDetailRes{}
+	uid, _ := ctx.Get("uid")
+	jwtToken, _ := ctx.Get("jwt_token")
+	claim, ok := jwtToken.(*utils.CustomClaims)
+	if !ok {
+		Resp.Err(ctx, 401, "无效的登录态")
+		return
+	}
+
+	db.Dao.Model(model.User{}).Where("id=?", uid).Find(&data)
+	db.Dao.Model(model.Profile{}).Where("userId=?", uid).Find(&data.Profile)
+	uroleIdList := db.Dao.Model(model.UserRolesRole{}).Where("userId=?", uid).Select("roleId")
+	db.Dao.Model(model.Role{}).Where("id IN (?)", uroleIdList).Find(&data.Roles)
+	for _, r := range data.Roles {
+		if r.Code == claim.CurrentRoleCode {
+			data.CurrentRole = r
+		}
+	}
+	Resp.Succ(ctx, data)
+}
+
+func (user) List(c context.Context, ctx *app.RequestContext) {
+	var data = inout.UserListRes{
+		PageData: make([]inout.UserListItem, 0),
+	}
+	gender := ctx.DefaultQuery("gender", "")
+	enable := ctx.DefaultQuery("enable", "")
+	username := ctx.DefaultQuery("username", "")
+	pageNo, _ := strconv.Atoi(ctx.DefaultQuery("pageNo", "1"))
+	pageSize, _ := strconv.Atoi(ctx.DefaultQuery("pageSize", "10"))
+
+	var profileList []model.Profile
+	orm := db.Dao.Model(model.Profile{})
+	if gender != "" {
+		orm = orm.Where("gender=?", gender)
+	}
+	if enable != "" {
+		orm = orm.Where("userId in(?)", db.Dao.Model(model.User{}).Where("enable=?", enable).Select("id"))
+	}
+	if username != "" {
+		orm = orm.Where("nickName like ?", "%"+username+"%")
+	}
+
+	orm.Count(&data.Total)
+	orm.Offset((pageNo - 1) * pageSize).Limit(pageSize).Find(&profileList)
+	for _, datum := range profileList {
+		var uinfo model.User
+		db.Dao.Model(&model.User{}).Where("ID = ?", datum.UserId).First(&uinfo)
+		var rols []*model.Role
+		db.Dao.Model(model.Role{}).
+			Where("id IN (?)", db.Dao.Model(model.UserRolesRole{}).Where("userId=?", datum.UserId).Select("roleId")).
+			Find(&rols)
+		data.PageData = append(data.PageData, inout.UserListItem{
+			ID:         uinfo.ID,
+			Username:   uinfo.Username,
+			Enable:     uinfo.Enable,
+			CreateTime: uinfo.CreateTime,
+			UpdateTime: uinfo.UpdateTime,
+			Gender:     datum.Gender,
+			Avatar:     datum.Avatar,
+			Address:    datum.Address,
+			Email:      datum.Email,
+			Roles:      rols,
+		})
+	}
+	Resp.Succ(ctx, data)
+}
+
+func (user) Profile(c context.Context, ctx *app.RequestContext) {
+	var params inout.PatchProfileUserReq
+	if err := ctx.BindJSON(&params); err != nil {
+		Resp.Err(ctx, 20001, err.Error())
+		return
+	}
+	err := db.Dao.Model(model.Profile{}).Where("id=?", params.Id).Updates(model.Profile{
+		Gender:   params.Gender,
+		Address:  params.Address,
+		Email:    params.Email,
+		NickName: params.NickName,
+		Avatar:   params.Avatar,
+	}).Error
+	if err != nil {
+		Resp.Err(ctx, 20001, err.Error())
+		return
+	}
+	Resp.Succ(ctx, nil)
+}
+
+func (user) Update(c context.Context, ctx *app.RequestContext) {
+	var params inout.PatchUserReq
+	if err := ctx.BindJSON(&params); err != nil {
+		Resp.Err(ctx, 20001, err.Error())
+		return
+	}
+	orm := db.Dao.Model(model.User{}).Where("id=?", params.Id)
+	if params.OldPassword != nil {
+		orm = orm.Where("password=?", fmt.Sprintf("%x", md5.Sum([]byte(*params.OldPassword))))
+	}
+	if params.NewPassword != nil {
+		orm.Update("password", fmt.Sprintf("%x", md5.Sum([]byte(*params.NewPassword))))
+	}
+	if params.Password != nil {
+		orm.Update("password", fmt.Sprintf("%x", md5.Sum([]byte(*params.Password))))
+	}
+	if params.Enable != nil {
+		orm.Update("enable", *params.Enable)
+	}
+	if params.Username != nil {
+		orm.Update("username", *params.Username)
+		db.Dao.Model(model.Profile{}).Where("userId=?", params.Id).Update("nickName", *params.Username)
+	}
+	if params.RoleIds != nil {
+		db.Dao.Where("userId=?", params.Id).Delete(model.UserRolesRole{})
+		for _, roleId := range *params.RoleIds {
+			db.Dao.Model(model.UserRolesRole{}).Create(&model.UserRolesRole{
+				UserId: params.Id,
+				RoleId: roleId,
+			})
+		}
+	}
+	Resp.Succ(ctx, nil)
+}
+
+func (user) Add(c context.Context, ctx *app.RequestContext) {
+	var params inout.AddUserReq
+	if err := ctx.BindAndValidate(&params); err != nil {
+		Resp.Err(ctx, 20001, err.Error())
+		return
+	}
+	var id int
+	err := db.Dao.Transaction(func(tx *gorm.DB) error {
+		tx.Model(&model.User{}).Select("max(id)").First(&id)
+		var newUser = model.User{
+			ID:         id + 1,
+			Username:   params.Username,
+			Password:   fmt.Sprintf("%x", md5.Sum([]byte(params.Password))),
+			Enable:     params.Enable,
+			CreateTime: time.Now(),
+			UpdateTime: time.Now(),
+		}
+		if err := tx.Create(&newUser).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&model.Profile{
+			ID:       id + 1,
+			UserId:   newUser.ID,
+			NickName: newUser.Username,
+		}).Error; err != nil {
+			return err
+		}
+		for _, roleId := range params.RoleIds {
+			if err := tx.Create(&model.UserRolesRole{
+				UserId: newUser.ID,
+				RoleId: roleId,
+			}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		Resp.Err(ctx, 20001, err.Error())
+		return
+	}
+
+	// Pre-merge this went out over HTTP with a hand-rolled empty gin.Context.
+	// Calling the request-context-free core directly removes that hack.
+	if _, err := service.AssociatePlan(c, &standerreq.AssociatePlanReq{
+		PlanId: int64(params.PlanId),
+		UserId: int32(id + 1),
+	}); err != nil {
+		Resp.Err(ctx, 20001, err.Error())
+		return
+	}
+	Resp.Succ(ctx, "")
+}
+
+func (user) Delete(c context.Context, ctx *app.RequestContext) {
+	uid := ctx.Param("id")
+	err := db.Dao.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("id =?", uid).Delete(&model.User{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("userId =?", uid).Delete(&model.UserRolesRole{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("userId =?", uid).Delete(&model.Profile{}).Error
+	})
+	if err != nil {
+		Resp.Err(ctx, 20001, err.Error())
+		return
+	}
+	Resp.Succ(ctx, "")
+}

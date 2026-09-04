@@ -1,0 +1,38 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.bin
+/stander
+/main
+output
+outputs/
+
+# Test & coverage
+*.test
+*.out
+
+# Editors / OS
+.DS_Store
+.idea
+.vscode
+.history/
+
+# Local config & secrets
+.env
+etc/*.local.yaml
+
+# Go workspace
+go.work
+go.work.sum
+
+# Local scratch
+debug/
+debug.sh
+build_debug.sh
+kill_dlv.sh
+log.txt
+__pycache__
+mysql/

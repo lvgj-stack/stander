@@ -1,0 +1,14 @@
+Server:
+  # 控制面与管理后台共用这一个端口。agent 的 --controller-addr 指向它。
+  Port: 8123
+  NodeRole: Controller
+  LogLevel: 0 # info
+EnableRelay: False
+Database:
+  Username: root
+  Password: change-me
+  DBName: stander
+  Addr: 127.0.0.1:3306
+Admin:
+  # 也可以用环境变量 STANDER_ADMIN_JWTSIGNINGKEY 覆盖，避免把密钥写进文件。
+  JWTSigningKey: change-me
