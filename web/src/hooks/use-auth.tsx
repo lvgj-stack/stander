@@ -15,6 +15,10 @@ interface AuthState {
   codes: Set<string>
   /** True while the identity behind an existing token is still loading. */
   loading: boolean
+  /** Set when the session could not be loaded for a reason other than a rejected token. */
+  error: Error | null
+  /** Retries loading the session after such a failure. */
+  retry: () => void
   login: (params: authApi.LoginParams) => Promise<void>
   logout: () => Promise<void>
   switchRole: (roleCode: string) => Promise<void>
@@ -83,6 +87,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const codes = useMemo(() => collectCodes(permissionQuery.data), [permissionQuery.data])
 
+  const retry = useCallback(() => {
+    void userQuery.refetch()
+    void permissionQuery.refetch()
+  }, [userQuery, permissionQuery])
+
   const value = useMemo<AuthState>(
     () => ({
       token,
@@ -90,6 +99,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       permissionTree: permissionQuery.data,
       codes,
       loading: Boolean(token) && (userQuery.isPending || permissionQuery.isPending),
+      // A rejected token clears itself and lands on the login page. Anything
+      // else — the backend down, the database unreachable — must be reported,
+      // or the console renders an empty shell that looks like a user with no
+      // permissions at all.
+      error: userQuery.error ?? permissionQuery.error,
+      retry,
       login,
       logout,
       switchRole,
@@ -98,9 +113,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       token,
       userQuery.data,
       userQuery.isPending,
+      userQuery.error,
       permissionQuery.data,
       permissionQuery.isPending,
+      permissionQuery.error,
       codes,
+      retry,
       login,
       logout,
       switchRole,
