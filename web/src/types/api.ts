@@ -161,8 +161,9 @@ export interface Profile {
   avatar: string
   address: string
   email: string
-  UserId: number
-  NickName: string
+  // camelCase to match the backend's json tags (internal/admin/model/profile.go).
+  userId: number
+  nickName: string
 }
 
 export interface CurrentUser {

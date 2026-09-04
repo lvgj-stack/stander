@@ -1,4 +1,4 @@
-import type { ChainGroup } from '@/types/api'
+import type { ChainGroup, Page } from '@/types/api'
 
 import { action } from './client'
 
@@ -20,7 +20,7 @@ export interface ChainGroupMemberInput {
  * It also returns an empty list for anyone who is not SUPER_ADMIN.
  */
 export const listChainGroups = () =>
-  action<{ ChainGroups: ChainGroup[] | null }>('chain-group', 'ListChainGroups', {})
+  action<Page<ChainGroup>>('chain-group', 'ListChainGroups', {})
 
 export interface AddChainGroupParams {
   Name: string

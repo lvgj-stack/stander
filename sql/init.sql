@@ -232,5 +232,5 @@ INSERT INTO `permission` VALUES (1,'资源管理','Resource_Mgt','MENU',2,'/pms/
 INSERT INTO `profile` VALUES (1,0,'https://wpimg.wallstcn.com/f778738c-e4f8-4870-b634-56703b4acafe.gif?imageView2/1/w/80/h/80','123123',NULL,1,'admin'),(3,0,'https://api.dicebear.com/7.x/miniavs/svg?seed=412','asdas','lvgj1998@gmail.com',3,'user01');
 INSERT INTO `role` VALUES (1,'SUPER_ADMIN','超级管理员',1),(2,'ROLE_QA','质检员',1),(4,'USER','普通用户',1);
 INSERT INTO `role_permissions_permission` VALUES (2,1),(2,2),(2,3),(2,4),(2,5),(2,9),(2,10),(2,11),(2,12),(2,14),(2,15),(4,8),(4,21),(4,22),(4,23);
-INSERT INTO `user` (`id`,`username`,`password`,`enable`,`createTime`,`updateTime`) VALUES (1,'admin','53d3c4c5c5f07891133f49250f6f13d9',1,'2023-11-18 16:18:59.150632','2024-10-12 08:07:01.652188'),(3,'user01','53d3c4c5c5f07891133f49250f6f13d9',1,'2024-10-13 22:55:16.601588','2024-10-13 22:55:16.601588');
+INSERT INTO `user` (`id`,`username`,`password`,`enable`,`createTime`,`updateTime`) VALUES (1,'admin','e10adc3949ba59abbe56e057f20f883e',1,'2023-11-18 16:18:59.150632','2024-10-12 08:07:01.652188'),(3,'user01','e10adc3949ba59abbe56e057f20f883e',1,'2024-10-13 22:55:16.601588','2024-10-13 22:55:16.601588');
 INSERT INTO `user_roles_role` VALUES (1,1),(1,2),(1,4),(3,4);

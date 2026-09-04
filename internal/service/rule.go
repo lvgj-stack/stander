@@ -128,6 +128,12 @@ func AddRule(ctx context.Context, req *req2.AddRuleReq) (*resp.AddRuleResp, erro
 	if err != nil {
 		return nil, err
 	}
+	// The admin console offers un-registered nodes in the rule form too, and a
+	// node has no port or key until its agent registers. Guard rather than
+	// dereference a nil pointer into a 500.
+	if node.Port == nil || node.Key == nil {
+		return nil, errors.New("node has not registered yet")
+	}
 	_, err = client.DoRequest(fmt.Sprintf("%s:%d", node.ManagerIP, *node.Port), "rule", "AddRule", *node.Key, req)
 	if err != nil {
 		return nil, err

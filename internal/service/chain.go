@@ -63,6 +63,16 @@ func AddChain(ctx context.Context, r *req.AddChainReq) (*resp.AddChainResp, erro
 		return nil, err
 	}
 
+	// A node only has an IP, port and key once its agent has registered. The
+	// admin console lists un-registered nodes in the "add chain" picker too, so
+	// guard here rather than dereferencing a nil pointer into a 500.
+	if node.IP == nil || node.Port == nil || node.Key == nil {
+		return nil, errors.New("node has not registered yet")
+	}
+	if r.PreferIpv6 && node.Ipv6 == nil {
+		return nil, errors.New("node has no IPv6 address")
+	}
+
 	chainIp := *node.IP
 	if r.PreferIpv6 {
 		chainIp = *node.Ipv6

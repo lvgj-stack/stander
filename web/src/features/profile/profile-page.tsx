@@ -88,7 +88,7 @@ function ProfileForm() {
 }
 
 function ProfileFields({ profile }: { profile: NonNullable<CurrentUser['profile']> }) {
-  const [nickName, setNickName] = useState(profile.NickName ?? '')
+  const [nickName, setNickName] = useState(profile.nickName ?? '')
   const [email, setEmail] = useState(profile.email ?? '')
   const [address, setAddress] = useState(profile.address ?? '')
   const [avatar, setAvatar] = useState(profile.avatar ?? '')

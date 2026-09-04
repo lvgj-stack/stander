@@ -87,7 +87,7 @@ export function ChainGroupsPage() {
 
       <DataTable
         columns={columns}
-        data={query.data?.ChainGroups ?? []}
+        data={query.data?.pageData ?? []}
         loading={query.isPending}
         error={query.error}
         emptyMessage="还没有链路组。注意：非超级管理员在此始终看到空列表。"
