@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
-	"github.com/cloudwego/hertz/pkg/common/hlog"
 	"github.com/hertz-contrib/logger/accesslog"
 
+	"github.com/lvgj-stack/stander/api"
 	"github.com/lvgj-stack/stander/internal/config"
 )
 
@@ -20,7 +20,8 @@ func newHertz(c *config.Config) *hertzServer {
 		server.WithHostPorts(":" + c.Server.Port),
 	)
 	h.Use(accesslog.New(accesslog.WithTimeZoneLocation(time.Local)))
-	hlog.SetLevel(hlog.Level(c.Server.LogLevel))
+	h.Use(api.Metrics())
+	api.RegisterMetrics(h)
 	return h
 }
 

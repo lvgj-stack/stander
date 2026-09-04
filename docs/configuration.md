@@ -19,6 +19,7 @@
 |---|---|---|---|
 | `Server.Port` | `STANDER_SERVER_PORT` | `8123` | HTTP 监听端口。管理后台和控制面共用 |
 | `Server.LogLevel` | `STANDER_SERVER_LOGLEVEL` | `2` | 0=trace 1=debug 2=info 3=notice 4=warn 5=error |
+| `Server.LogFormat` | `STANDER_SERVER_LOGFORMAT` | `text` | `text` 或 `json`。集群里用 `json`，日志采集器才能解析成字段 |
 | `Server.Timezone` | `STANDER_SERVER_TIMEZONE` | `Asia/Shanghai` | 进程时区。**会影响每日流量的日期归属**，见下 |
 | `Server.WorkerIntervalSeconds` | `STANDER_SERVER_WORKERINTERVALSECONDS` | `30` | 后台任务的执行间隔 |
 | `Server.NodeRole` | `STANDER_SERVER_NODEROLE` | `Controller` | 节点角色，由子命令决定，一般不用手动设 |

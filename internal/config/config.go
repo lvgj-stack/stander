@@ -51,6 +51,9 @@ type Server struct {
 	LogLevel int
 	// WorkerIntervalSeconds overrides how often the background job runs.
 	WorkerIntervalSeconds int
+	// LogFormat is "text" or "json". JSON is what a cluster log collector can
+	// parse into fields.
+	LogFormat string
 	// Timezone is the location the process runs in. Daily traffic rows are
 	// keyed by date, so this decides when a day rolls over; a container
 	// defaulting to UTC would shift the boundary by the offset.
@@ -118,6 +121,7 @@ func registerDefaults(v *viper.Viper) {
 	v.SetDefault("server.loglevel", 2)
 	v.SetDefault("server.workerintervalseconds", 30)
 	v.SetDefault("server.timezone", "Asia/Shanghai")
+	v.SetDefault("server.logformat", "text")
 
 	v.SetDefault("enablerelay", false)
 
@@ -147,6 +151,9 @@ func applyDefaults(c *Config) {
 	}
 	if c.Server.Timezone == "" {
 		c.Server.Timezone = "Asia/Shanghai"
+	}
+	if c.Server.LogFormat == "" {
+		c.Server.LogFormat = "text"
 	}
 }
 

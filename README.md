@@ -63,6 +63,7 @@ API 无状态、可任意扩副本；`stander worker` 是单例，必须恰好�
 | `internal/forward/` | 转发数据面：connector、manager、selector |
 | `internal/model/` | gorm-gen 产出的 entity 与 dal |
 | `internal/captcha/` | 数据库支撑的验证码存储（多副本可用） |
+| `internal/observability/` | Prometheus 指标与结构化日志 |
 | `sql/init.sql` | 建表与初始数据 |
 | `deploy/` | Dockerfile 编排、Kubernetes 清单 |
 
@@ -72,7 +73,7 @@ API 无状态、可任意扩副本；`stander worker` 是单例，必须恰好�
 
 - 管理后台在根路径：`/auth/*`、`/user/*`、`/role/*`、`/permission/*`、`/stander/*`
 - 控制面在 `/api/v1/*`，供 agent 回调和 gost 上报使用
-- 探针 `/healthz`、`/readyz`
+- 探针 `/healthz`、`/readyz`，指标 `/metrics`
 
 `/stander/*` 是给前端用的门面，在**进程内**直接调用 `internal/service`。
 

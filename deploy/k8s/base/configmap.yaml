@@ -7,6 +7,8 @@ data:
   # Secrets (database password, JWT signing key) come from the Secret instead.
   STANDER_SERVER_PORT: "8123"
   STANDER_SERVER_LOGLEVEL: "2"
+  # JSON so a cluster log collector can parse the lines into fields.
+  STANDER_SERVER_LOGFORMAT: "json"
   STANDER_SERVER_TIMEZONE: "Asia/Shanghai"
   STANDER_SERVER_WORKERINTERVALSECONDS: "30"
   STANDER_DATABASE_ADDR: "mysql:3306"

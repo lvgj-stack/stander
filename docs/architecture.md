@@ -43,6 +43,8 @@ internal/
   ├─ model/{entity,dal} gorm-gen 产物
   ├─ forward/           转发数据面：connector · manager · selector
   ├─ client/            agent → 控制面、gost 客户端
+  ├─ observability/     Prometheus 指标、结构化日志
+  ├─ captcha/           数据库支撑的验证码存储
   ├─ config/ db/ server/ common/ utils/
 ```
 

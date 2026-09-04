@@ -199,7 +199,7 @@ func (t *UDPConnector) Handle(conn net.Conn) {
 			hlog.Error("connect to chain failed", "err", err.Error())
 			return
 		}
-		if _, err := fmt.Fprintf(destConn, t.RAddr+"\n"); err != nil {
+		if _, err := fmt.Fprintf(destConn, "%s\n", t.RAddr); err != nil {
 			return
 		}
 		transport(conn, destConn)

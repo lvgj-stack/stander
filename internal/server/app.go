@@ -18,6 +18,7 @@ import (
 	"github.com/lvgj-stack/stander/internal/config"
 	"github.com/lvgj-stack/stander/internal/db"
 	"github.com/lvgj-stack/stander/internal/forward/manager"
+	"github.com/lvgj-stack/stander/internal/observability"
 	"github.com/lvgj-stack/stander/internal/service/req"
 	"github.com/lvgj-stack/stander/internal/service/resp"
 	"github.com/lvgj-stack/stander/internal/utils"
@@ -35,6 +36,7 @@ const shutdownGrace = 15 * time.Second
 // default for a single-node install, and must be turned off when the API is
 // scaled past one replica — see cmd/worker.go.
 func RunServer(ctx context.Context, c *config.Config, withWorker bool) error {
+	observability.SetupLogging(observability.LogFormat(c.Server.LogFormat), c.Server.LogLevel)
 	if err := applyTimezone(c.Server.Timezone); err != nil {
 		return err
 	}
@@ -70,6 +72,7 @@ func RunServer(ctx context.Context, c *config.Config, withWorker bool) error {
 // RunWorker runs only the singleton background jobs, with no HTTP listener
 // beyond the probe endpoints Kubernetes needs to tell whether it is healthy.
 func RunWorker(ctx context.Context, c *config.Config) error {
+	observability.SetupLogging(observability.LogFormat(c.Server.LogFormat), c.Server.LogLevel)
 	if err := applyTimezone(c.Server.Timezone); err != nil {
 		return err
 	}
@@ -96,6 +99,7 @@ func RunWorker(ctx context.Context, c *config.Config) error {
 
 // RunAgent registers this node with the controller, then serves the agent API.
 func RunAgent(ctx context.Context, c *config.Config) error {
+	observability.SetupLogging(observability.LogFormat(c.Server.LogFormat), c.Server.LogLevel)
 	if err := applyTimezone(c.Server.Timezone); err != nil {
 		return err
 	}

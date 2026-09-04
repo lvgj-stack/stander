@@ -15,6 +15,7 @@ import (
 	"github.com/lvgj-stack/stander/internal/captcha"
 	"github.com/lvgj-stack/stander/internal/db"
 	"github.com/lvgj-stack/stander/internal/forward/manager"
+	"github.com/lvgj-stack/stander/internal/observability"
 )
 
 // DefaultInterval is how often the traffic reconciliation pass runs.
@@ -56,7 +57,10 @@ func (w *Worker) Run(ctx context.Context) error {
 			hlog.Info("worker stopping")
 			return nil
 		case <-ticker.C:
-			if err := ReconcileTrafficPlans(ctx); err != nil {
+			start := time.Now()
+			err := ReconcileTrafficPlans(ctx)
+			observability.ObserveWorkerRun(err, time.Since(start))
+			if err != nil {
 				hlog.Errorf("traffic reconciliation failed: %v", err)
 			}
 			// Without this the captcha table grows by one row per issued

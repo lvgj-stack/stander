@@ -94,6 +94,25 @@ liveness 刻意不查数据库：否则数据库一挂，kubelet 会把所有 Po
 库才是真正出问题的那个，重启应用只会让恢复更慢。readiness 查，让连不上库的 Pod
 退出 Service。
 
+### 可观测性
+
+所有进程都在同一个端口的 `/metrics` 暴露 Prometheus 指标，清单里已经带好了
+`prometheus.io/scrape` 注解。除了 Go runtime 的标准指标，还有：
+
+| 指标 | 说明 |
+|---|---|
+| `stander_http_requests_total` | 请求数，按路由 / 方法 / 状态码 |
+| `stander_http_request_duration_seconds` | 请求延迟直方图 |
+| `stander_worker_runs_total` | 后台任务执行次数，按成功/失败。**worker 不再增长就是它挂了** |
+| `stander_worker_run_duration_seconds` | 单次后台任务耗时 |
+
+路由标签用的是注册时的路由模式（`/user/:id`）而不是实际 URL——按 URL 打标签会
+让每个用户 id 变成一条独立的时间序列，最终把 Prometheus 压垮。没匹配上任何路由
+的请求统一折叠成 `<unmatched>`。
+
+日志设置 `STANDER_SERVER_LOGFORMAT=json` 后是每行一个 JSON 对象
+（`level` / `ts` / `caller` / `msg`），prod overlay 的 ConfigMap 里已经开了。
+
 ### 优雅退出
 
 收到 SIGTERM 后进程会：取消后台 worker → 停止接收新连接 → 给在途请求最多 15 秒
@@ -134,6 +153,10 @@ Deployment（`replicas: 1`），各自配自己的 Secret，靠 nodeSelector 钉
   自建主从。
 - **单端口。** 管理后台和控制面共用 `Server.Port`。agent 回拨和前端访问是同一个
   地址，Ingress 上不需要分路径。
+- **没有 ServiceMonitor / PodMonitor。** 清单用的是 `prometheus.io/*` 注解，
+  适配基于注解发现的部署方式。用 Prometheus Operator 的话需要自己补一个
+  ServiceMonitor。
+- **没有 NetworkPolicy。** agent 从集群外回拨控制面，加策略前要先想清楚放行来源。
 - **schema 变更没有迁移工具。** `sql/init.sql` 是全量建表脚本，用了
   `create table if not exists`，可以重复执行，但不会改已存在的表。改表结构需要
   自己写 ALTER，然后跑 `stander gen` 重新生成 `internal/model`。
