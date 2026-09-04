@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stander-agent
+  labels:
+    app.kubernetes.io/name: stander
+    app.kubernetes.io/component: agent
+spec:
+  # One node key identifies one node, so this cannot be scaled: two replicas
+  # would register as the same node and fight over the same forwarding ports.
+  # Deploy one of these per forwarding node, each with its own Secret.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: agent
+    spec:
+      # The agent listens on arbitrary forwarding ports chosen at runtime, which
+      # cannot be declared up front as containerPorts, so it needs the host
+      # network. This is also why it is pinned to one node.
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        stander.io/forwarding-node: "true"
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: agent
+          image: stander
+          args:
+            - agent
+            - --controller-addr=$(CONTROLLER_ADDR)
+            - --node-key=$(NODE_KEY)
+          env:
+            - name: CONTROLLER_ADDR
+              value: "stander.stander.svc.cluster.local:8123"
+            - name: NODE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: stander-agent-key
+                  key: NODE_KEY
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 18123
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          securityContext:
+            # Binding forwarding ports below 1024 needs this capability; drop
+            # the whole set otherwise.
+            capabilities:
+              drop: ["ALL"]
+              add: ["NET_BIND_SERVICE"]

@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Deploy this only if a forwarding node lives inside the cluster. Most agents
+# run on standalone VPSes and are installed with scripts/install.sh instead —
+# see docs/deployment.md for why this is not a DaemonSet.
+resources:
+  - agent-deployment.yaml
+
+images:
+  - name: stander
+    newTag: 0.1.0

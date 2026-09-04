@@ -1,0 +1,8 @@
+- op: replace
+  path: /spec/replicas
+  value: 1
+# Dev keeps the background job in the API process, so there is nothing else to
+# deploy and no chance of two workers.
+- op: replace
+  path: /spec/template/spec/containers/0/args
+  value: ["server"]

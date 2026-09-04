@@ -51,6 +51,10 @@ type Server struct {
 	LogLevel int
 	// WorkerIntervalSeconds overrides how often the background job runs.
 	WorkerIntervalSeconds int
+	// Timezone is the location the process runs in. Daily traffic rows are
+	// keyed by date, so this decides when a day rolls over; a container
+	// defaulting to UTC would shift the boundary by the offset.
+	Timezone string
 }
 
 // Admin holds settings for the admin console that used to live in naive-admin-go.
@@ -113,6 +117,7 @@ func registerDefaults(v *viper.Viper) {
 	v.SetDefault("server.noderole", string(common.Controller))
 	v.SetDefault("server.loglevel", 2)
 	v.SetDefault("server.workerintervalseconds", 30)
+	v.SetDefault("server.timezone", "Asia/Shanghai")
 
 	v.SetDefault("enablerelay", false)
 
@@ -139,6 +144,9 @@ func applyDefaults(c *Config) {
 	}
 	if c.Server.NodeRole == "" {
 		c.Server.NodeRole = string(common.Controller)
+	}
+	if c.Server.Timezone == "" {
+		c.Server.Timezone = "Asia/Shanghai"
 	}
 }
 

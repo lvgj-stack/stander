@@ -1,0 +1,36 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: stander
+
+resources:
+  - ../../base
+  - namespace.yaml
+  - ingress.yaml
+  - hpa.yaml
+  - pdb.yaml
+
+patches:
+  - path: replicas.yaml
+    target:
+      kind: Deployment
+      name: stander-server
+
+configMapGenerator:
+  - name: stander-config
+    behavior: merge
+    literals:
+      - STANDER_DATABASE_ADDR=mysql.stander.svc.cluster.local:3306
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+# The Secret is NOT generated here. Create it out of band so credentials never
+# land in git:
+#   kubectl -n stander create secret generic stander-secrets \
+#     --from-literal=STANDER_DATABASE_PASSWORD=... \
+#     --from-literal=STANDER_ADMIN_JWTSIGNINGKEY=...
+
+images:
+  - name: stander
+    newTag: 0.1.0

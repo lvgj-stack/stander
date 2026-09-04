@@ -1,0 +1,45 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: stander-dev
+
+resources:
+  - ../../base
+  - namespace.yaml
+  - mysql.yaml
+
+patches:
+  - path: single-replica.yaml
+    target:
+      kind: Deployment
+      name: stander-server
+
+# Dev runs everything in one pod: the server keeps its in-process worker, so
+# the separate worker Deployment is scaled to zero rather than deleted (keeping
+# it makes the difference from prod visible in `kubectl get deploy`).
+  - path: no-worker.yaml
+    target:
+      kind: Deployment
+      name: stander-worker
+
+# The stander-schema ConfigMap is created out of band rather than generated
+# here: kustomize refuses to read files outside its own directory, and copying
+# sql/init.sql into this overlay would make it a second source of truth.
+#
+#   kubectl -n stander-dev create configmap stander-schema \
+#     --from-file=init.sql=sql/init.sql
+#
+# It is mounted into MySQL's docker-entrypoint-initdb.d by mysql.yaml.
+
+secretGenerator:
+  - name: stander-secrets
+    literals:
+      - STANDER_DATABASE_PASSWORD=stander
+      - STANDER_ADMIN_JWTSIGNINGKEY=dev-only-not-a-real-key
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+images:
+  - name: stander
+    newTag: 0.1.0

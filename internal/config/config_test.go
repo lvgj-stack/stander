@@ -122,3 +122,26 @@ func TestNilServerWorkerInterval(t *testing.T) {
 		t.Errorf("got %v, want 0 for a nil Server", got)
 	}
 }
+
+// A container image carries no /etc/localtime, so the timezone has to come from
+// configuration or every daily-traffic boundary silently shifts to UTC.
+func TestTimezoneDefaultsToShanghai(t *testing.T) {
+	c, err := InitConfig("", false)
+	if err != nil {
+		t.Fatalf("InitConfig: %v", err)
+	}
+	if c.Server.Timezone != "Asia/Shanghai" {
+		t.Errorf("Timezone = %q, want Asia/Shanghai", c.Server.Timezone)
+	}
+}
+
+func TestTimezoneOverridableFromEnv(t *testing.T) {
+	t.Setenv("STANDER_SERVER_TIMEZONE", "UTC")
+	c, err := InitConfig("", false)
+	if err != nil {
+		t.Fatalf("InitConfig: %v", err)
+	}
+	if c.Server.Timezone != "UTC" {
+		t.Errorf("Timezone = %q, want UTC", c.Server.Timezone)
+	}
+}

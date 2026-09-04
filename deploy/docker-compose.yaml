@@ -1,0 +1,46 @@
+# Local development stack: MySQL plus the stander server with its in-process
+# worker. Production runs the server and worker as separate workloads — see
+# deploy/k8s and docs/deployment.md.
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: stander
+      MYSQL_DATABASE: stander
+    ports:
+      - "13306:3306"
+    volumes:
+      - ../sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      # 127.0.0.1, not localhost: localhost resolves to the unix socket, which
+      # answers during MySQL's init phase before TCP is listening — which is
+      # what the application actually connects over.
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pstander"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  stander:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      STANDER_DATABASE_ADDR: mysql:3306
+      STANDER_DATABASE_USERNAME: root
+      STANDER_DATABASE_PASSWORD: stander
+      STANDER_DATABASE_DBNAME: stander
+      STANDER_ADMIN_JWTSIGNINGKEY: dev-only-not-a-real-key
+      STANDER_SERVER_LOGLEVEL: "2"
+    command: ["server", "--pprof-addr", ""]
+    # stander fails fast when the database is unreachable; restarting is how it
+    # recovers, the same way a Kubernetes Pod would.
+    restart: unless-stopped
+    ports:
+      - "8123:8123"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  mysql-data:

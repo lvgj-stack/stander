@@ -33,6 +33,9 @@ const shutdownGrace = 15 * time.Second
 // default for a single-node install, and must be turned off when the API is
 // scaled past one replica — see cmd/worker.go.
 func RunServer(ctx context.Context, c *config.Config, withWorker bool) error {
+	if err := applyTimezone(c.Server.Timezone); err != nil {
+		return err
+	}
 	if err := db.Init(c.Database); err != nil {
 		return err
 	}
@@ -63,6 +66,9 @@ func RunServer(ctx context.Context, c *config.Config, withWorker bool) error {
 // RunWorker runs only the singleton background jobs, with no HTTP listener
 // beyond the probe endpoints Kubernetes needs to tell whether it is healthy.
 func RunWorker(ctx context.Context, c *config.Config) error {
+	if err := applyTimezone(c.Server.Timezone); err != nil {
+		return err
+	}
 	if err := db.Init(c.Database); err != nil {
 		return err
 	}
@@ -87,6 +93,9 @@ func RunWorker(ctx context.Context, c *config.Config) error {
 
 // RunAgent registers this node with the controller, then serves the agent API.
 func RunAgent(ctx context.Context, c *config.Config) error {
+	if err := applyTimezone(c.Server.Timezone); err != nil {
+		return err
+	}
 	r := &req.RegisterNodeReq{}
 	r.Port = 8123
 	r.Ipv4 = utils.GetOutBoundIPv4()

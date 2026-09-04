@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stander-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: server
+    spec:
+      serviceAccountName: stander
+      # Longer than the 15s drain in internal/server/app.go, so in-flight
+      # requests finish before the kubelet escalates to SIGKILL.
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: stander
+          image: stander
+          # --worker=false is what makes this Deployment safe to scale: the
+          # background job advances every user's traffic period and must run in
+          # exactly one process. It lives in stander-worker instead.
+          args: ["server", "--worker=false"]
+          ports:
+            - name: http
+              containerPort: 8123
+          envFrom:
+            - configMapRef:
+                name: stander-config
+            - secretRef:
+                name: stander-secrets
+          # Liveness deliberately does not check the database: a database
+          # outage would otherwise restart every pod in a loop.
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            failureThreshold: 30
+            periodSeconds: 2
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: server
