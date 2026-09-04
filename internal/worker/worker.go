@@ -12,6 +12,8 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/common/hlog"
 
+	"github.com/lvgj-stack/stander/internal/captcha"
+	"github.com/lvgj-stack/stander/internal/db"
 	"github.com/lvgj-stack/stander/internal/forward/manager"
 )
 
@@ -56,6 +58,13 @@ func (w *Worker) Run(ctx context.Context) error {
 		case <-ticker.C:
 			if err := ReconcileTrafficPlans(ctx); err != nil {
 				hlog.Errorf("traffic reconciliation failed: %v", err)
+			}
+			// Without this the captcha table grows by one row per issued
+			// captcha and is never pruned.
+			if n, err := captcha.DeleteExpired(db.Get()); err != nil {
+				hlog.Errorf("pruning expired captchas failed: %v", err)
+			} else if n > 0 {
+				hlog.Debugf("pruned %d expired captchas", n)
 			}
 		}
 	}

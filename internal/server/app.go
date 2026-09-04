@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/cloudwego/hertz/pkg/common/hlog"
 
 	"github.com/lvgj-stack/stander/api"
+	"github.com/lvgj-stack/stander/internal/captcha"
 	"github.com/lvgj-stack/stander/internal/client"
 	"github.com/lvgj-stack/stander/internal/config"
 	"github.com/lvgj-stack/stander/internal/db"
@@ -45,22 +47,24 @@ func RunServer(ctx context.Context, c *config.Config, withWorker bool) error {
 		}
 	}()
 	utils.SetJWTSigningKey(c.Admin.JWTSigningKey)
+	// Captcha answers go to the database, not a process-local map, so a login
+	// can be verified by a different replica than the one that issued it.
+	utils.SetCaptchaStore(captcha.New(db.Get()))
+
+	ctx, stop := withSignals(ctx)
+	defer stop()
 
 	h := newHertz(c)
 	api.RegisterHealth(h, db.Pinger{})
 	api.RegisterAdmin(h)
 	api.RegisterController(h)
 
+	var wg sync.WaitGroup
 	if withWorker {
-		w := worker.New(c.Server.WorkerInterval(), c.EnableRelay)
-		go func() {
-			if err := w.Run(ctx); err != nil {
-				hlog.Errorf("worker stopped: %v", err)
-			}
-		}()
+		startWorker(ctx, &wg, c)
 	}
 
-	return serve(ctx, h)
+	return serve(ctx, h, &wg)
 }
 
 // RunWorker runs only the singleton background jobs, with no HTTP listener
@@ -78,17 +82,16 @@ func RunWorker(ctx context.Context, c *config.Config) error {
 		}
 	}()
 
+	ctx, stop := withSignals(ctx)
+	defer stop()
+
 	h := newHertz(c)
 	api.RegisterHealth(h, db.Pinger{})
 
-	go func() {
-		w := worker.New(c.Server.WorkerInterval(), c.EnableRelay)
-		if err := w.Run(ctx); err != nil {
-			hlog.Errorf("worker stopped: %v", err)
-		}
-	}()
+	var wg sync.WaitGroup
+	startWorker(ctx, &wg, c)
 
-	return serve(ctx, h)
+	return serve(ctx, h, &wg)
 }
 
 // RunAgent registers this node with the controller, then serves the agent API.
@@ -138,11 +141,37 @@ func RunAgent(ctx context.Context, c *config.Config) error {
 	}
 	manager.InitAgent(&initInfo.Result)
 
+	ctx, stop := withSignals(ctx)
+	defer stop()
+
 	h := newHertz(c)
 	api.RegisterHealth(h, nil)
 	api.RegisterAgent(h)
 
-	return serve(ctx, h)
+	return serve(ctx, h, nil)
+}
+
+// withSignals returns a context cancelled on SIGINT/SIGTERM.
+//
+// It has to wrap the context BEFORE the background jobs are started: creating
+// it inside serve() meant the workers held the uncancelled parent and never saw
+// the shutdown, so they were simply killed when the process exited.
+func withSignals(ctx context.Context) (context.Context, context.CancelFunc) {
+	return signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+}
+
+// startWorker runs the background jobs and registers them with wg so that
+// shutdown waits for the current pass to finish instead of tearing it down
+// mid-write.
+func startWorker(ctx context.Context, wg *sync.WaitGroup, c *config.Config) {
+	w := worker.New(c.Server.WorkerInterval(), c.EnableRelay)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := w.Run(ctx); err != nil {
+			hlog.Errorf("worker stopped: %v", err)
+		}
+	}()
 }
 
 // serve runs h until the process is asked to stop, then drains in-flight
@@ -151,10 +180,7 @@ func RunAgent(ctx context.Context, c *config.Config) error {
 // Hertz's own Spin() traps signals internally, which leaves no way to cancel
 // the background worker at the same moment. Handling the signal here means one
 // cancellation reaches every component.
-func serve(ctx context.Context, h *hertzServer) error {
-	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
+func serve(ctx context.Context, h *hertzServer, workers *sync.WaitGroup) error {
 	errCh := make(chan error, 1)
 	go func() { errCh <- h.Run() }()
 
@@ -167,9 +193,36 @@ func serve(ctx context.Context, h *hertzServer) error {
 	hlog.Infof("shutting down, draining for up to %s", shutdownGrace)
 	drainCtx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
 	defer cancel()
-	if err := h.Shutdown(drainCtx); err != nil {
-		return fmt.Errorf("graceful shutdown: %w", err)
+	shutdownErr := h.Shutdown(drainCtx)
+
+	// Wait for the background jobs to notice the cancellation, so the process
+	// does not exit in the middle of a database write. Bounded by the same
+	// drain window: a stuck worker must not block the pod past its grace
+	// period, which would only earn it a SIGKILL.
+	if workers != nil {
+		if waitTimeout(workers, drainCtx) {
+			hlog.Warn("background jobs did not stop within the drain window")
+		}
+	}
+
+	if shutdownErr != nil {
+		return fmt.Errorf("graceful shutdown: %w", shutdownErr)
 	}
 	hlog.Info("stopped")
 	return nil
+}
+
+// waitTimeout reports whether the wait gave up before wg reached zero.
+func waitTimeout(wg *sync.WaitGroup, ctx context.Context) bool {
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return false
+	case <-ctx.Done():
+		return true
+	}
 }

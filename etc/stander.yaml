@@ -2,13 +2,18 @@ Server:
   # 控制面与管理后台共用这一个端口。agent 的 --controller-addr 指向它。
   Port: 8123
   NodeRole: Controller
-  LogLevel: 0 # info
+  LogLevel: 2 # 0=trace 1=debug 2=info 3=notice 4=warn 5=error
+  # 决定 user_daily_traffic 的日期归属，不只是日志时间戳。
+  Timezone: Asia/Shanghai
+  # 后台任务的执行间隔（秒）。
+  WorkerIntervalSeconds: 30
 EnableRelay: False
 Database:
   Username: root
+  # 生产请用 STANDER_DATABASE_PASSWORD 注入，不要写在文件里。
   Password: change-me
   DBName: stander
   Addr: 127.0.0.1:3306
 Admin:
-  # 也可以用环境变量 STANDER_ADMIN_JWTSIGNINGKEY 覆盖，避免把密钥写进文件。
+  # 生产请用 STANDER_ADMIN_JWTSIGNINGKEY 注入。
   JWTSigningKey: change-me
