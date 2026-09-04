@@ -20,10 +20,11 @@ stander version
 ## 快速开始
 
 ```bash
-# 起一个本地栈：MySQL + stander
+# 起一个本地栈：MySQL + stander + 管理后台前端
 docker compose -f deploy/docker-compose.yaml up
 
 curl localhost:8123/healthz
+open http://localhost:8080        # 管理后台，默认 admin / 123456
 ```
 
 或者直接跑源码：
@@ -64,7 +65,9 @@ API 无状态、可任意扩副本；`stander worker` 是单例，必须恰好�
 | `internal/model/` | gorm-gen 产出的 entity 与 dal |
 | `internal/captcha/` | 数据库支撑的验证码存储（多副本可用） |
 | `internal/observability/` | Prometheus 指标与结构化日志 |
+| `web/` | 管理后台前端（React + shadcn/ui，构建成静态站点） |
 | `sql/init.sql` | 建表与初始数据 |
+| `sql/web_menu.sql` | 前端新增页面的菜单权限记录 |
 | `deploy/` | Dockerfile 编排、Kubernetes 清单 |
 
 ## 路由布局

@@ -39,3 +39,9 @@ mysql/
 
 # Kustomize render output
 /deploy/k8s/**/rendered.yaml
+
+# 前端
+web/node_modules/
+web/dist/
+web/.env
+web/.env.local

@@ -1,0 +1,211 @@
+import { useEffect } from 'react'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useForm } from 'react-hook-form'
+import { Loader2Icon } from 'lucide-react'
+import { z } from 'zod'
+
+import { addNode, editNode } from '@/api/node'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form'
+import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
+import { useActionMutation } from '@/hooks/use-action-mutation'
+import type { Node } from '@/types/api'
+
+const schema = z.object({
+  nodeName: z.string().min(1, '请输入节点名称'),
+  nodeType: z.enum(['inbound', 'outbound']),
+  rate: z.number({ error: '请输入数字' }).positive('倍率必须大于 0'),
+  defaultIPv6: z.boolean(),
+})
+
+type NodeValues = z.infer<typeof schema>
+
+interface NodeFormDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  /** Absent means "create"; present means "edit that node". */
+  node?: Node
+  /** Called with the freshly issued key after a create. */
+  onCreated?: (key: string) => void
+}
+
+export function NodeFormDialog({ open, onOpenChange, node, onCreated }: NodeFormDialogProps) {
+  const editing = Boolean(node)
+
+  const form = useForm<NodeValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { nodeName: '', nodeType: 'inbound', rate: 1, defaultIPv6: false },
+  })
+
+  // The dialog is mounted once and reused, so the values have to be pushed in
+  // each time it opens rather than at mount.
+  useEffect(() => {
+    if (!open) return
+    form.reset({
+      nodeName: node?.nodeName ?? '',
+      nodeType: (node?.nodeType as 'inbound' | 'outbound') ?? 'inbound',
+      rate: node?.rate ?? 1,
+      defaultIPv6: false,
+    })
+  }, [open, node, form])
+
+  const mutation = useActionMutation({
+    mutationFn: async (values: NodeValues) => {
+      if (node) {
+        await editNode({ ID: node.id, NodeName: values.nodeName, Rate: values.rate })
+        return null
+      }
+      return addNode({
+        NodeName: values.nodeName,
+        NodeType: values.nodeType,
+        Rate: values.rate,
+        DefaultIPv6: values.defaultIPv6,
+      })
+    },
+    successMessage: editing ? '节点已更新' : '节点已创建',
+    invalidate: [['nodes']],
+    onSuccess: (key) => {
+      onOpenChange(false)
+      if (!editing && typeof key === 'string' && key) onCreated?.(key)
+    },
+  })
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{editing ? '编辑节点' : '新增节点'}</DialogTitle>
+          <DialogDescription>
+            {editing
+              ? '节点类型创建后不可更改。'
+              : '创建后会生成一个节点密钥，agent 启动时需要它，且只展示这一次。'}
+          </DialogDescription>
+        </DialogHeader>
+
+        <Form {...form}>
+          <form
+            id="node-form"
+            onSubmit={form.handleSubmit((values) => mutation.mutate(values))}
+            className="space-y-4"
+          >
+            <FormField
+              control={form.control}
+              name="nodeName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>节点名称</FormLabel>
+                  <FormControl>
+                    <Input placeholder="hk-01" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="nodeType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>节点类型</FormLabel>
+                  <Select
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    disabled={editing}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="inbound">入口（inbound）</SelectItem>
+                      <SelectItem value="outbound">出口（outbound）</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="rate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>流量倍率</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      min="0.1"
+                      name={field.name}
+                      ref={field.ref}
+                      onBlur={field.onBlur}
+                      value={Number.isNaN(field.value) ? '' : field.value}
+                      onChange={(event) => field.onChange(event.target.valueAsNumber)}
+                    />
+                  </FormControl>
+                  <FormDescription>结算时按此倍率折算消耗的流量。</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {!editing && (
+              <FormField
+                control={form.control}
+                name="defaultIPv6"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between rounded-md border p-3">
+                    <div className="space-y-0.5">
+                      <FormLabel>默认走 IPv6</FormLabel>
+                      <FormDescription>节点注册时优先使用 IPv6 地址。</FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            )}
+          </form>
+        </Form>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            取消
+          </Button>
+          <Button type="submit" form="node-form" disabled={mutation.isPending}>
+            {mutation.isPending && <Loader2Icon className="animate-spin" />}
+            {editing ? '保存' : '创建'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}

@@ -133,3 +133,27 @@ cookie 只带 id。多副本下签发和校验通常不在同一个副本，登�
 管理后台的 `role` / `permission` / `profile` 和两张关联表在 gorm-gen 侧没有产
 物，是 `internal/admin/model` 下手写的 gorm 模型。`user` 表**只有** gorm-gen 
 的 `entity.User` 一份定义。
+
+## 前端
+
+`web/` 是管理后台的界面：React + TypeScript + shadcn/ui，构建成静态站点，
+和 Go 二进制彻底分开——不 embed、不打进同一个镜像、可以独立发布。
+
+它只调管理后台那组接口（根路径下的 `/auth`、`/user`、`/role`、`/permission`、
+`/stander`），`/api/v1` 那组是给 agent 和 gost 用的，前端不碰。
+
+后端为此**没有任何改动**。前端要迁就的是既有接口的三个特点：
+
+- **业务失败时 HTTP 状态码仍然是 200**，成功与否只能看信封里的 `code`。
+- **验证码的答案在服务端**（现在是 `captcha` 表），图片本身不含答案，
+  session cookie 只带 id，所以取验证码和登录这两个请求必须带 cookie。
+- **实体字段几乎全是指针**，JSON 里可能是 `null`。
+
+推荐把前端和 API 放在同一个 origin 后面（`web/nginx.conf` 就是这么反代的）。
+后端虽然开了 `AllowAllOrigins`，但跨域下验证码的 session cookie 还需要
+`SameSite=None` 才能带上，同源部署省掉这一整类问题。
+
+菜单权限沿用 `permission` 表，但只用 `code`：那张表的 `component` 列存的是上一版
+Vue 前端的文件路径，React 这边用不上，路由表是静态写在前端代码里的。
+新增页面要在 `permission` 表补一条记录，否则菜单对谁都不可见——超级管理员看到的是
+"所有顶级记录"，不是"全部权限"。`sql/web_menu.sql` 补的就是这个。

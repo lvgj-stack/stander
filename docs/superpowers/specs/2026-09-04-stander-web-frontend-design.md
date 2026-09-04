@@ -150,10 +150,35 @@ Vitest + happy-dom，只测确实容易错的地方：
 
 不测组件渲染。`tsc --noEmit` 与 ESLint 进 CI 门槛。
 
+## 实现中发现的后端缺口
+
+设计阶段没有的信息，读实现时才发现。这些都不改后端，界面上如实说明：
+
+- `EditChainGroup`（`internal/service/chain_group.go`）是空实现，直接返回。
+  所以链路组只做新建和删除，不提供一个点了没反应的"编辑"。
+- `ListChainGroup` 只 select 了 `chain_group_id` 和 `chain_group_name`，
+  `ChainGroupVO.Chains` 永远是空的——组内成员在 API 上不可读。列表里不放一个
+  永远为空的"成员"列。它还对非超级管理员直接返回空列表。
+- 套餐只有 `ListPlans` 和 `AssociatePlan`，没有增删改。套餐页面是只读的。
+- `EditChain` 只写 `chain_name`，所以链路编辑只开放改名。
+- `DelChain` / `DelRule` 需要端口而不只是 ID——后端要先在节点上拆掉监听。
+- `req.AssociatePlanReq` 用的是 `userId` / `planId` 小驼峰，和它周围
+  PascalCase 的请求体不一致。
+
+另外，`permission` 表里没有链路组、流量套餐、转发用户对应的 code，这三个菜单
+对谁都不可见（超级管理员看到的是"所有顶级记录"，不是"全部权限"）。
+补一份 `sql/web_menu.sql` 插入这三条。
+
 ## 构建与交付
 
-`pnpm build` 产出 `web/dist`，纯静态。`VITE_API_BASE_URL` 指向后端地址，
-构建期注入。仓库里附一份 `web/Dockerfile`（nginx 托管 + SPA fallback）和
-nginx 配置，让静态站点能和后端一起用 docker compose 起起来。
+`pnpm build` 产出 `web/dist`，纯静态。`web/Dockerfile` 打的镜像用 nginx 托管，
+做 SPA fallback，并把 API 路径反代到 `STANDER_API_UPSTREAM`。
 
-后端不需要改动。
+**默认同源部署**：让 nginx 反代 API，而不是让浏览器跨域直连。后端虽然开了
+`AllowAllOrigins`，但验证码的 session cookie 在跨域下还需要 `SameSite=None`，
+同源省掉这一整类问题。要分开部署时，构建期设 `VITE_API_BASE_URL`。
+
+Node 版本钉在 24（`.nvmrc`），包管理器钉在 `packageManager` 字段——容器里
+corepack 默认会拉 pnpm 10 去读 pnpm 9 写的 lockfile，不钉就会在镜像构建时炸。
+
+后端代码不需要改动。

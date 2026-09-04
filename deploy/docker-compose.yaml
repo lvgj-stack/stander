@@ -10,7 +10,10 @@ services:
     ports:
       - "13306:3306"
     volumes:
-      - ../sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ../sql/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      # Menu rows for the pages the admin console added. Runs after init.sql;
+      # the entrypoint applies these in filename order.
+      - ../sql/web_menu.sql:/docker-entrypoint-initdb.d/02-web-menu.sql:ro
       - mysql-data:/var/lib/mysql
     healthcheck:
       # 127.0.0.1, not localhost: localhost resolves to the unix socket, which
@@ -41,6 +44,20 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+
+  web:
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+    environment:
+      # nginx reverse-proxies /auth, /user, /role, /permission and /stander to
+      # the backend, so the app and the API share an origin. That is what keeps
+      # the captcha's session cookie working without SameSite=None.
+      STANDER_API_UPSTREAM: http://stander:8123
+    ports:
+      - "8080:80"
+    depends_on:
+      - stander
 
 volumes:
   mysql-data:

@@ -108,6 +108,20 @@ got, err := service.PingNode(ctx, &req.PingNodeReq{NodeID: 1})
 - `import` 分组：标准库 / 第三方 / 本项目，用
   `goimports -local github.com/lvgj-stack/stander` 整理
 
+## 前端
+
+```bash
+cd web
+pnpm install
+pnpm dev          # http://localhost:5173，API 请求由 vite 代理到 :8123
+pnpm test         # Vitest
+pnpm lint
+pnpm build        # 类型检查 + 构建到 web/dist
+```
+
+需要 Node 24（`web/.nvmrc`），包管理器版本由 `packageManager` 字段钉死。
+细节和后端接口的几个坑见 [web/README.md](../web/README.md)。
+
 ## 常用命令
 
 ```bash
