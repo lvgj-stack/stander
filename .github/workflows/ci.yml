@@ -1,0 +1,124 @@
+# Checks that run on every push and pull request.
+#
+# The job that matters most is `e2e`: it builds both images, stands the whole
+# stack up on a real Kubernetes cluster from deploy/k8s, and drives it over
+# HTTP. Unit tests do not catch a bad probe path, a pod that cannot write its
+# nginx config, or an Ingress rule that sends the console's API calls into the
+# static file server — and every one of those breaks only in production.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: go
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          # Kept in step with the go directive in go.mod and the builder image
+          # in Dockerfile. All three drifting apart is how a build starts
+          # silently downloading a different toolchain.
+          go-version: "1.25"
+          cache: true
+
+      - name: gofmt
+        # No carve-out for the gorm-gen output: it is already gofmt-clean, and
+        # an exception here would just hide the day it stops being.
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"; echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: test
+        run: go test -race -count=1 ./...
+
+      - name: build
+        run: go build ./...
+
+  web:
+    name: web
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/.nvmrc
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build
+
+  manifests:
+    name: manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Render every overlay
+        # A kustomization that does not build is a deploy that fails after the
+        # images are already pushed.
+        run: |
+          for dir in deploy/k8s/overlays/* deploy/k8s/agent; do
+            echo "::group::$dir"
+            kubectl kustomize "$dir"
+            echo "::endgroup::"
+          done
+
+      - name: Validate against the Kubernetes schemas
+        run: |
+          curl -fsSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz \
+            | tar -xz kubeconform
+          for dir in deploy/k8s/overlays/* deploy/k8s/agent; do
+            echo "Validating $dir"
+            kubectl kustomize "$dir" | ./kubeconform -strict -summary -
+          done
+
+  e2e:
+    name: e2e on kubernetes
+    runs-on: ubuntu-latest
+    needs: [go, web, manifests]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kind
+        # The script owns the cluster end to end — creating it, loading images,
+        # applying, and tearing it down. Letting an action create the cluster
+        # instead would mean CI and a developer's laptop run different code
+        # paths, which is exactly the drift this job exists to catch.
+        run: |
+          curl -fsSL -o /usr/local/bin/kind \
+            https://kind.sigs.k8s.io/dl/v0.30.0/kind-linux-amd64
+          chmod +x /usr/local/bin/kind
+          kind version
+
+      - name: Deploy to the cluster and drive it
+        run: scripts/e2e-kind.sh

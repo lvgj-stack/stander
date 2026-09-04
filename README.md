@@ -48,8 +48,12 @@ kubectl -n stander create secret generic stander-secrets \
 kubectl apply -k deploy/k8s/overlays/prod
 ```
 
-API 无状态、可任意扩副本；`stander worker` 是单例，必须恰好一个。
-细节见 [deployment.md](docs/deployment.md)。
+API 无状态、可任意扩副本；`stander worker` 是单例，必须恰好一个；控制台
+（`stander-web`）是静态站点，也可任意扩。细节见
+[deployment.md](docs/deployment.md)。
+
+每个 PR 都会把整套清单部署到一个真实的 kind 集群上跑通再合并，
+见 [cicd.md](docs/cicd.md)。本地跑同一套：`scripts/e2e-kind.sh`。
 
 ## 目录
 
@@ -69,6 +73,8 @@ API 无状态、可任意扩副本；`stander worker` 是单例，必须恰好�
 | `sql/init.sql` | 建表与初始数据 |
 | `sql/web_menu.sql` | 前端新增页面的菜单权限记录 |
 | `deploy/` | Dockerfile 编排、Kubernetes 清单 |
+| `.github/workflows/` | CI 与发布流水线 |
+| `scripts/e2e-kind.sh` | 在 kind 集群上部署并验证整套系统（CI 跑的就是它） |
 
 ## 路由布局
 

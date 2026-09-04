@@ -15,6 +15,10 @@ patches:
     target:
       kind: Deployment
       name: stander-server
+  - path: replicas.yaml
+    target:
+      kind: Deployment
+      name: stander-web
 
 configMapGenerator:
   - name: stander-config
@@ -31,6 +35,11 @@ generatorOptions:
 #     --from-literal=STANDER_DATABASE_PASSWORD=... \
 #     --from-literal=STANDER_ADMIN_JWTSIGNINGKEY=...
 
+# CI rewrites both tags to the SHA it built. Keeping them in the overlay (not
+# only in base) is what lets a deploy pin prod to a specific build without
+# touching base.
 images:
   - name: stander
+    newTag: 0.1.0
+  - name: stander-web
     newTag: 0.1.0

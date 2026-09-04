@@ -1,0 +1,184 @@
+# Builds and publishes the two container images, then rolls them out.
+#
+# Triggered by a version tag, or by hand from the Actions tab when a specific
+# commit needs to go out.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Which environment to deploy
+        type: choice
+        options: [prod, dev]
+        default: prod
+        required: true
+
+concurrency:
+  # Never two rollouts at once against the same cluster.
+  group: release-${{ github.event.inputs.environment || 'prod' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  images:
+    name: build and push
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      owner: ${{ steps.meta.outputs.owner }}
+    strategy:
+      matrix:
+        include:
+          - image: stander
+            context: .
+            dockerfile: Dockerfile
+          - image: stander-web
+            context: ./web
+            dockerfile: ./web/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Work out the tag
+        id: meta
+        # Both images always carry the same tag. Mixing versions between the
+        # console and the API it talks to is not a state worth supporting.
+        run: |
+          if [ "${{ github.ref_type }}" = tag ]; then
+            tag="${GITHUB_REF_NAME#v}"
+          else
+            tag="$(git rev-parse --short HEAD)"
+          fi
+          # GHCR rejects an image path with uppercase in it, and the owner name
+          # keeps whatever case the account was created with.
+          owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          {
+            echo "tag=$tag"
+            echo "owner=$owner"
+          } >> "$GITHUB_OUTPUT"
+          echo "Building ghcr.io/$owner/*:$tag"
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          # arm64 as well as amd64: forwarding nodes are often cheap ARM VPSes,
+          # and the same image runs the server.
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ steps.meta.outputs.owner }}/${{ matrix.image }}:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ steps.meta.outputs.owner }}/${{ matrix.image }}:latest
+          build-args: |
+            VERSION=${{ steps.meta.outputs.tag }}
+            COMMIT=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  deploy:
+    name: deploy to kubernetes
+    runs-on: ubuntu-latest
+    needs: images
+    environment: ${{ github.event.inputs.environment || 'prod' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure cluster access
+        # A kubeconfig scoped to the stander namespace, stored as an
+        # environment secret so the prod environment can require a reviewer.
+        #
+        # The secret arrives through env rather than being interpolated into
+        # the script text: an expression expanded inline becomes part of the
+        # command, where a stray `set -x` or a shell trace would print it.
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG }}
+        run: |
+          if [ -z "$KUBECONFIG_B64" ]; then
+            echo "::error::KUBECONFIG secret is not set for this environment."
+            exit 1
+          fi
+          mkdir -p ~/.kube
+          printf '%s' "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+          echo "Deploying to: $(kubectl config current-context)"
+
+      - name: Point the overlay at the images just pushed
+        working-directory: deploy/k8s/overlays/${{ github.event.inputs.environment || 'prod' }}
+        run: |
+          registry="${{ env.REGISTRY }}/${{ needs.images.outputs.owner }}"
+          tag="${{ needs.images.outputs.tag }}"
+          # `kustomize edit` is not available here, so the images block is
+          # rewritten in place. It is checked afterwards by rendering it.
+          python3 - "$registry" "$tag" <<'PY'
+          import pathlib, re, sys
+          registry, tag = sys.argv[1], sys.argv[2]
+          p = pathlib.Path('kustomization.yaml')
+          text = p.read_text()
+          for name in ('stander-web', 'stander'):
+              text = re.sub(
+                  rf'(- name: {re.escape(name)}\n)(\s+)(?:newName: \S+\n\s+)?newTag: \S+',
+                  rf'\g<1>\g<2>newName: {registry}/{name}\n\g<2>newTag: {tag}',
+                  text,
+                  count=1,
+              )
+          p.write_text(text)
+          PY
+          cat kustomization.yaml
+
+      - name: Render and show what will change
+        run: |
+          kubectl kustomize deploy/k8s/overlays/${{ github.event.inputs.environment || 'prod' }} \
+            | tee /tmp/rendered.yaml | grep -E '^\s+image:'
+          kubectl diff -f /tmp/rendered.yaml || true
+
+      - name: Apply
+        run: kubectl apply -f /tmp/rendered.yaml
+
+      - name: Wait for the rollout
+        # Every workload has to come back healthy. Without this the job goes
+        # green while pods are still crash-looping.
+        #
+        # The namespace is read out of the rendered manifests, not out of the
+        # kubeconfig: the overlay is what decides where this goes (`stander`
+        # for prod, `stander-dev` for dev), and a kubeconfig with no namespace
+        # set would otherwise send the check to the wrong place and pass.
+        run: |
+          ns=$(grep -m1 '^  namespace: ' /tmp/rendered.yaml | awk '{print $2}')
+          [ -n "$ns" ] || { echo "::error::could not determine namespace"; exit 1; }
+          echo "namespace=$ns" >> "$GITHUB_ENV"
+          echo "Waiting on rollouts in $ns"
+          for d in stander-server stander-web stander-worker; do
+            echo "::group::$d"
+            kubectl -n "$ns" rollout status "deploy/$d" --timeout=300s
+            echo "::endgroup::"
+          done
+
+      - name: Roll back if the rollout failed
+        if: failure()
+        run: |
+          ns="${namespace:-}"
+          if [ -z "$ns" ]; then
+            echo "::error::Deploy failed before the namespace was known; nothing rolled back."
+            exit 1
+          fi
+          for d in stander-server stander-web stander-worker; do
+            kubectl -n "$ns" rollout undo "deploy/$d" || true
+          done
+          echo "::error::Rollout failed in $ns; undo issued for all three Deployments."

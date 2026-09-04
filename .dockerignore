@@ -1,5 +1,6 @@
 .git
 .gitignore
+.github
 docs
 deploy
 sql
@@ -7,3 +8,7 @@ scripts
 *.md
 Dockerfile
 .dockerignore
+# The admin console has its own image and its own build. Without this line the
+# Go build context includes web/node_modules — hundreds of megabytes shipped to
+# the daemon on every build, for files the binary never uses.
+web

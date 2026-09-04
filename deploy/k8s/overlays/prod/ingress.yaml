@@ -3,8 +3,6 @@ kind: Ingress
 metadata:
   name: stander
   annotations:
-    # The admin console and the agent callbacks share one port; both are plain
-    # HTTP behind this Ingress.
     nginx.ingress.kubernetes.io/proxy-body-size: "8m"
 spec:
   ingressClassName: nginx
@@ -12,10 +10,46 @@ spec:
     - host: stander.example.com
       http:
         paths:
+          # The API prefixes, routed straight to the Go process. They are
+          # listed before the catch-all because nginx-ingress sorts by
+          # descending path length, so the longer prefixes win regardless of
+          # order here — but keeping them first makes the intent readable.
+          #
+          # This list is the same one web/nginx.conf proxies when the web image
+          # is fronting the API itself (docker compose, a plain docker run).
+          # Two copies is a real risk of drift, so if you add an API prefix to
+          # the backend, change both — docs/deployment.md says so too.
+          - path: /auth
+            pathType: Prefix
+            backend: &api
+              service:
+                name: stander
+                port:
+                  name: http
+          - path: /user
+            pathType: Prefix
+            backend: *api
+          - path: /role
+            pathType: Prefix
+            backend: *api
+          - path: /permission
+            pathType: Prefix
+            backend: *api
+          - path: /stander
+            pathType: Prefix
+            backend: *api
+          # Agent callbacks and gost traffic reporting. These never go through
+          # the console, so the web image knows nothing about them — the
+          # Ingress is the only place they can be routed.
+          - path: /api/v1
+            pathType: Prefix
+            backend: *api
+          # Everything else is the single-page app. It must stay last: a
+          # Prefix rule on "/" matches every request.
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: stander
+                name: stander-web
                 port:
                   name: http

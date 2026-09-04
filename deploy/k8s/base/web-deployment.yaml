@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stander-web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: web
+    spec:
+      serviceAccountName: stander
+      securityContext:
+        runAsNonRoot: true
+        # 101 is the uid the nginx-unprivileged image ships with.
+        runAsUser: 101
+        # Without this the emptyDir volumes below come up owned by root and
+        # nginx's entrypoint fails with "conf.d is not writable" before it ever
+        # binds a port. fsGroup makes the kubelet hand them to group 101.
+        fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: web
+          image: stander-web
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            # Only consulted when nginx proxies the API itself. Under this
+            # Ingress it does not — the API paths are routed to the stander
+            # Service directly — but a wrong value here would be a silent trap
+            # for anyone who does route everything at this Service, so it
+            # points somewhere real.
+            - name: STANDER_API_UPSTREAM
+              value: http://stander:8123
+          # Static files with no backend to wait on, so the two probes can be
+          # the same cheap request.
+          livenessProbe:
+            httpGet:
+              path: /index.html
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /index.html
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          # nginx writes in three places even when it only serves static files:
+          # the entrypoint renders the config template into conf.d, the worker
+          # keeps its caches under /var/cache/nginx, and the pid file plus
+          # temp bodies land in /tmp. Each needs to be writable for
+          # readOnlyRootFilesystem to hold.
+          volumeMounts:
+            - name: nginx-conf
+              mountPath: /etc/nginx/conf.d
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: nginx-conf
+          emptyDir: {}
+        - name: nginx-cache
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: web

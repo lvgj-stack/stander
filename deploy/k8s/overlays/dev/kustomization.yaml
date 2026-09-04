@@ -22,6 +22,14 @@ patches:
       kind: Deployment
       name: stander-worker
 
+# One console replica is plenty on a laptop cluster. It needs its own patch
+# rather than reusing single-replica.yaml, which also rewrites the container
+# args — the web container has none.
+  - path: web-single-replica.yaml
+    target:
+      kind: Deployment
+      name: stander-web
+
 # The stander-schema ConfigMap is created out of band rather than generated
 # here: kustomize refuses to read files outside its own directory, and copying
 # sql/init.sql into this overlay would make it a second source of truth.
@@ -40,6 +48,11 @@ secretGenerator:
 generatorOptions:
   disableNameSuffixHash: true
 
+# There is no Ingress in dev, so the console is reached by port-forwarding to
+# the stander-web Service and nginx proxies the API to stander itself. That is
+# the same path docker compose takes, which makes it worth exercising here.
 images:
   - name: stander
+    newTag: 0.1.0
+  - name: stander-web
     newTag: 0.1.0

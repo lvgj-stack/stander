@@ -55,7 +55,7 @@ services:
       # the captcha's session cookie working without SameSite=None.
       STANDER_API_UPSTREAM: http://stander:8123
     ports:
-      - "8080:80"
+      - "8080:8080"
     depends_on:
       - stander
 

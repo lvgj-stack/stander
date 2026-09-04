@@ -6,7 +6,10 @@
 |---|---|
 | 本地开发 | `docker compose -f deploy/docker-compose.yaml up` |
 | 单机 | `stander server`（后台任务在同进程内） |
-| Kubernetes | `stander server --worker=false` × N + `stander worker` × 1 |
+| Kubernetes | `stander server --worker=false` × N + `stander worker` × 1 + 控制台 × N |
+
+CI/CD 见 [cicd.md](cicd.md)。每个 PR 都会把整套清单部署到一个真实的 kind 集群上
+跑一遍，所以这里写的步骤是被机器验证过的，不是纸面流程。
 
 ## 一条不能违反的规则
 
@@ -30,29 +33,61 @@
 
 ```
 deploy/k8s/
-├── base/                 通用定义
+├── base/                 通用定义（API、worker、控制台）
 ├── overlays/dev/         单副本 + 进程内 worker + 一个临时 MySQL
 ├── overlays/prod/        3 副本 + 独立 worker + HPA + PDB + Ingress
 └── agent/                可选：集群内的转发节点
 ```
 
+一共三个 Deployment：`stander-server`（API）、`stander-worker`（单例后台任务）、
+`stander-web`（管理后台控制台，nginx 托管静态文件）。
+
+### 控制台与 API 的路由
+
+Ingress 把 API 前缀直接路由到 `stander` Service，其余交给 `stander-web`：
+
+| 路径 | 去向 |
+|---|---|
+| `/auth`、`/user`、`/role`、`/permission`、`/stander` | `stander`（管理后台 API） |
+| `/api/v1` | `stander`（agent 回调、gost 上报） |
+| 其余 | `stander-web`（单页应用） |
+
+**同一个 host 是有意的**：验证码的答案存在服务端 session cookie 里，跨域下需要
+`SameSite=None` 才能带上，同源省掉这一整类问题。
+
+同一份前缀清单也出现在 `web/nginx.conf` 里——那是 web 镜像自己反代 API 时用的
+（docker compose、单独 `docker run`）。**加新前缀两处都要改。**
+
+控制台 Pod 用的是 `nginx-unprivileged` 镜像，跑在 uid 101、只读根文件系统上，
+和 Go 那两个 workload 同一套安全约束。它挂了三个 emptyDir（`/etc/nginx/conf.d`、
+`/var/cache/nginx`、`/tmp`），并且**必须**配 `fsGroup: 101`——否则这些卷会是
+root 属主，nginx 的 entrypoint 还没绑端口就会以 "conf.d is not writable" 退出。
+
 ### 构建镜像
+
+两个镜像。正常情况下由 `release.yml` 打标签时构建并推到 GHCR，手工构建是：
 
 ```bash
 docker build \
   --build-arg VERSION=$(git describe --tags --always) \
   --build-arg COMMIT=$(git rev-parse --short HEAD) \
   -t your-registry/stander:0.1.0 .
+
+docker build -t your-registry/stander-web:0.1.0 ./web
 ```
 
-镜像是 distroless static + nonroot，约 35MB。在国内网络下加
-`--build-arg GOPROXY=https://goproxy.cn,direct`。
+后端镜像是 distroless static + nonroot，约 35MB；控制台镜像是 nginx + 静态文件，
+约 50MB。在国内网络下给后端加 `--build-arg GOPROXY=https://goproxy.cn,direct`。
+
+**两个镜像用同一个 tag。** 控制台和它调用的 API 版本对不上不是一个值得支持的状态，
+流水线也是这么做的。
 
 ### 部署到生产
 
 ```bash
 # 1. 建库并导入 schema（一次性）
 mysql -h <host> -u root -p stander < sql/init.sql
+mysql -h <host> -u root -p stander < sql/web_menu.sql
 
 # 2. 创建 Secret（不要进 git）
 kubectl create namespace stander
@@ -79,8 +114,19 @@ dev overlay 自带一个临时 MySQL。schema 需要带外创建 ConfigMap——
 ```bash
 kubectl create namespace stander-dev
 kubectl -n stander-dev create configmap stander-schema \
-  --from-file=init.sql=sql/init.sql
+  --from-file=init.sql=sql/init.sql \
+  --from-file=web_menu.sql=sql/web_menu.sql
 kubectl apply -k deploy/k8s/overlays/dev
+```
+
+`web_menu.sql` 不能漏：控制台的链路组、流量套餐、转发用户三个菜单靠它在
+`permission` 表里的记录才可见，缺了这三条对任何人都不显示——包括超级管理员。
+
+整套流程有脚本，也是 CI 跑的那一个：
+
+```bash
+scripts/e2e-kind.sh                 # 建集群、部署、跑检查、删掉
+KEEP_CLUSTER=1 scripts/e2e-kind.sh  # 留着集群自己翻
 ```
 
 ### 健康探针

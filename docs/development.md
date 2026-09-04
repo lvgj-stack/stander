@@ -122,6 +122,28 @@ pnpm build        # 类型检查 + 构建到 web/dist
 需要 Node 24（`web/.nvmrc`），包管理器版本由 `packageManager` 字段钉死。
 细节和后端接口的几个坑见 [web/README.md](../web/README.md)。
 
+## 在 Kubernetes 上跑一遍
+
+改了清单、Dockerfile、探针路径或者 nginx 配置之后，值得在真集群上过一遍——
+这些东西单测碰不到：
+
+```bash
+scripts/e2e-kind.sh                 # 建 kind 集群、部署、跑检查、删掉
+KEEP_CLUSTER=1 scripts/e2e-kind.sh  # 留着集群自己翻
+```
+
+需要 docker、kind、kubectl。CI 跑的就是这个脚本，本地和 CI 不会走两条路径。
+
+脚本会把自己的 kubeconfig 写到临时目录并 `export KUBECONFIG` 指过去，**不碰
+`~/.kube/config`**。开发机和 CI runner 的当前上下文很可能是某个真集群，
+`kubectl apply -k overlays/dev` 打到生产不是一个值得留着的可能性。
+
+国内网络下 Go 镜像拉不到模块时：
+
+```bash
+GOPROXY=https://goproxy.cn,direct scripts/e2e-kind.sh
+```
+
 ## 常用命令
 
 ```bash

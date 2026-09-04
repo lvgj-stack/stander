@@ -6,8 +6,12 @@ spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    # Only the API scales. stander-worker is a singleton by design and must
-    # never be given an HPA.
+    # Only the API scales.
+    #
+    # stander-worker is a singleton by design and must never be given an HPA.
+    # stander-web has none either, but for a different reason: it serves static
+    # files out of memory, so its replica count is about surviving node loss,
+    # not about load. Its fixed 3 replicas do that already.
     name: stander-server
   minReplicas: 3
   maxReplicas: 10

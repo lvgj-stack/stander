@@ -9,3 +9,13 @@ spec:
       app.kubernetes.io/component: server
 # No PDB for stander-worker on purpose: it is a single replica, so any budget
 # would block node drains forever.
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: stander-web
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: web

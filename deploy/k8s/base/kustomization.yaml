@@ -7,6 +7,8 @@ resources:
   - server-deployment.yaml
   - server-service.yaml
   - worker-deployment.yaml
+  - web-deployment.yaml
+  - web-service.yaml
 
 labels:
   - includeSelectors: true
@@ -14,6 +16,10 @@ labels:
       app.kubernetes.io/name: stander
       app.kubernetes.io/part-of: stander
 
+# Two images, bumped together. CI rewrites both tags with the commit SHA it
+# built; see docs/cicd.md.
 images:
   - name: stander
+    newTag: 0.1.0
+  - name: stander-web
     newTag: 0.1.0
