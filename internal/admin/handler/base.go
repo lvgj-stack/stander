@@ -43,3 +43,13 @@ func (rps) Err(ctx *app.RequestContext, errCode int, message string) {
 func unknownAction(ctx *app.RequestContext, action string) {
 	Resp.Err(ctx, 20001, "unknown action: "+action)
 }
+
+// deref reads a nullable column from a gorm-gen entity, where every field is a
+// pointer, falling back to the zero value for NULL.
+func deref[T any](p *T) T {
+	if p == nil {
+		var zero T
+		return zero
+	}
+	return *p
+}

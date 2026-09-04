@@ -13,6 +13,7 @@ import (
 	"github.com/lvgj-stack/stander/internal/admin/inout"
 	"github.com/lvgj-stack/stander/internal/admin/model"
 	"github.com/lvgj-stack/stander/internal/db"
+	"github.com/lvgj-stack/stander/internal/model/entity"
 	"github.com/lvgj-stack/stander/internal/service"
 	standerreq "github.com/lvgj-stack/stander/internal/service/req"
 	"github.com/lvgj-stack/stander/internal/utils"
@@ -23,7 +24,6 @@ var User = &user{}
 type user struct{}
 
 func (user) Detail(c context.Context, ctx *app.RequestContext) {
-	var data = &inout.UserDetailRes{}
 	uid, _ := ctx.Get("uid")
 	jwtToken, _ := ctx.Get("jwt_token")
 	claim, ok := jwtToken.(*utils.CustomClaims)
@@ -32,7 +32,10 @@ func (user) Detail(c context.Context, ctx *app.RequestContext) {
 		return
 	}
 
-	db.Dao.Model(model.User{}).Where("id=?", uid).Find(&data)
+	var u entity.User
+	db.Dao.Model(entity.User{}).Where("id=?", uid).Find(&u)
+	data := inout.NewUserDetailRes(&u)
+
 	db.Dao.Model(model.Profile{}).Where("userId=?", uid).Find(&data.Profile)
 	uroleIdList := db.Dao.Model(model.UserRolesRole{}).Where("userId=?", uid).Select("roleId")
 	db.Dao.Model(model.Role{}).Where("id IN (?)", uroleIdList).Find(&data.Roles)
@@ -60,7 +63,7 @@ func (user) List(c context.Context, ctx *app.RequestContext) {
 		orm = orm.Where("gender=?", gender)
 	}
 	if enable != "" {
-		orm = orm.Where("userId in(?)", db.Dao.Model(model.User{}).Where("enable=?", enable).Select("id"))
+		orm = orm.Where("userId in(?)", db.Dao.Model(entity.User{}).Where("enable=?", enable).Select("id"))
 	}
 	if username != "" {
 		orm = orm.Where("nickName like ?", "%"+username+"%")
@@ -69,18 +72,18 @@ func (user) List(c context.Context, ctx *app.RequestContext) {
 	orm.Count(&data.Total)
 	orm.Offset((pageNo - 1) * pageSize).Limit(pageSize).Find(&profileList)
 	for _, datum := range profileList {
-		var uinfo model.User
-		db.Dao.Model(&model.User{}).Where("ID = ?", datum.UserId).First(&uinfo)
+		var uinfo entity.User
+		db.Dao.Model(&entity.User{}).Where("ID = ?", datum.UserId).First(&uinfo)
 		var rols []*model.Role
 		db.Dao.Model(model.Role{}).
 			Where("id IN (?)", db.Dao.Model(model.UserRolesRole{}).Where("userId=?", datum.UserId).Select("roleId")).
 			Find(&rols)
 		data.PageData = append(data.PageData, inout.UserListItem{
-			ID:         uinfo.ID,
-			Username:   uinfo.Username,
-			Enable:     uinfo.Enable,
-			CreateTime: uinfo.CreateTime,
-			UpdateTime: uinfo.UpdateTime,
+			ID:         int(deref(uinfo.ID)),
+			Username:   deref(uinfo.Username),
+			Enable:     deref(uinfo.Enable) != 0,
+			CreateTime: deref(uinfo.CreateTime),
+			UpdateTime: deref(uinfo.UpdateTime),
 			Gender:     datum.Gender,
 			Avatar:     datum.Avatar,
 			Address:    datum.Address,
@@ -117,7 +120,7 @@ func (user) Update(c context.Context, ctx *app.RequestContext) {
 		Resp.Err(ctx, 20001, err.Error())
 		return
 	}
-	orm := db.Dao.Model(model.User{}).Where("id=?", params.Id)
+	orm := db.Dao.Model(entity.User{}).Where("id=?", params.Id)
 	if params.OldPassword != nil {
 		orm = orm.Where("password=?", fmt.Sprintf("%x", md5.Sum([]byte(*params.OldPassword))))
 	}
@@ -154,28 +157,37 @@ func (user) Add(c context.Context, ctx *app.RequestContext) {
 	}
 	var id int
 	err := db.Dao.Transaction(func(tx *gorm.DB) error {
-		tx.Model(&model.User{}).Select("max(id)").First(&id)
-		var newUser = model.User{
-			ID:         id + 1,
-			Username:   params.Username,
-			Password:   fmt.Sprintf("%x", md5.Sum([]byte(params.Password))),
-			Enable:     params.Enable,
-			CreateTime: time.Now(),
-			UpdateTime: time.Now(),
+		// The `user` table has no auto_increment, so the id is picked by hand.
+		tx.Model(&entity.User{}).Select("max(id)").First(&id)
+		newID := int32(id + 1)
+		enable := int32(0)
+		if params.Enable {
+			enable = 1
 		}
-		if err := tx.Create(&newUser).Error; err != nil {
+		now := time.Now()
+		hashed := fmt.Sprintf("%x", md5.Sum([]byte(params.Password)))
+		newUser := entity.User{
+			ID:         &newID,
+			Username:   &params.Username,
+			Password:   &hashed,
+			Enable:     &enable,
+			CreateTime: &now,
+			UpdateTime: &now,
+		}
+		// Omit the association, otherwise gorm tries to upsert an empty traffic plan.
+		if err := tx.Omit("TrafficPlan").Create(&newUser).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&model.Profile{
 			ID:       id + 1,
-			UserId:   newUser.ID,
-			NickName: newUser.Username,
+			UserId:   int(newID),
+			NickName: params.Username,
 		}).Error; err != nil {
 			return err
 		}
 		for _, roleId := range params.RoleIds {
 			if err := tx.Create(&model.UserRolesRole{
-				UserId: newUser.ID,
+				UserId: int(newID),
 				RoleId: roleId,
 			}).Error; err != nil {
 				return err
@@ -203,7 +215,7 @@ func (user) Add(c context.Context, ctx *app.RequestContext) {
 func (user) Delete(c context.Context, ctx *app.RequestContext) {
 	uid := ctx.Param("id")
 	err := db.Dao.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("id =?", uid).Delete(&model.User{}).Error; err != nil {
+		if err := tx.Where("id =?", uid).Delete(&entity.User{}).Error; err != nil {
 			return err
 		}
 		if err := tx.Where("userId =?", uid).Delete(&model.UserRolesRole{}).Error; err != nil {

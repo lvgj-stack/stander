@@ -111,7 +111,7 @@ stander/
 | 项 | 处理 |
 |---|---|
 | `pkg/utils/jwt.go` | 无任何调用方，死代码，删除。保留 admin 版（Claims 是超集） |
-| `model.User/Role/Permission/Profile` vs `entity.User` | 映射同一批表。以 gorm-gen 的 `entity` 为准，为 admin 的表补 gen 配置，48 处 `db.Dao` 裸查询改用 `dal.Q` |
+| `model.User` vs `entity.User` | 映射同一张 `user` 表，是唯一真正的重复。删掉手写的 `model.User`，admin 侧改用 `entity.User`。`role`/`permission`/`profile`/两张关联表在 gorm-gen 侧**没有**对应物，不存在重复，继续手写放在 `internal/admin/model` |
 | 配置 | viper 读 `etc/stander.yaml`，`STANDER_` 前缀环境变量覆盖。删除 godotenv / `.env` |
 | 日志 | 统一 hlog，8 处 `zap.S()` 改写 |
 | DB 句柄 | `db.Dao` 与 `model.InitMysql` 合并为一处 |
@@ -136,18 +136,27 @@ stander/
 
 **阶段二 — 去重**
 
-8. 模型统一到 gorm-gen `entity`/`dal`，删除手写 model 包
-9. 配置统一到 viper
-10. 日志统一到 hlog
-11. 验收：同上，且补充的测试通过
+8. 删除手写的 `model.User`，admin 改用 `entity.User`；`UserDetailRes` 不再靠内嵌
+   模型继承 JSON key，改为显式字段 + `NewUserDetailRes` 映射函数
+9. 配置统一到 viper（随阶段一一起完成）
+10. 日志统一到 hlog（随阶段一一起完成）
+11. 验收：同上，且 JSON 线格式测试通过
+
+**范围修正**：设计阶段估的"48 处 `db.Dao` 裸查询改用 `dal.Q`"是把范围说大了。
+实际清点后，`db.Dao` 的裸查询里只有 `user` 一张表和 gorm-gen 重复；其余 5 张
+admin 表没有 gen 产物，把它们改写成 `dal.Q` 只是换个写法，不消除任何重复，
+反而要在没有集成测试兜底的情况下动 40 多处查询。所以只做了 `user` 这一处。
 
 ## 测试
 
 现状几乎无测试（仅 `pkg/utils/utils_test.go` 和一个空的 `com_test.go`）。本次补充：
 
-- `api/route_test.go`：表驱动，断言所有预期路由都注册成功（回归网的主力）
-- `internal/utils`：jwt 签发/解析、captcha 生成/校验的单测
-- `internal/admin/handler`：响应信封 `Succ`/`Err` 的单测
+- `api/route_test.go`：表驱动，断言所有预期路由都注册成功（回归网的主力）。
+  注册动作本身就是对 Hertz 路由树冲突的断言——冲突会在注册时 panic
+- `internal/utils`：jwt 签发/解析/过期/换密钥、captcha 生成与校验、
+  `Md5Hash`/`IsPrivateIP`/`GenIpAndPort` 的单测
+- `internal/admin/inout`：`UserDetailRes` / `UserListItem` 的 JSON key 集合断言，
+  防止去重把前端可见的线格式改掉
 
 不追求覆盖率，目标是给重构提供回归保护。
 

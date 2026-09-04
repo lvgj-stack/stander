@@ -14,6 +14,7 @@ import (
 	"github.com/lvgj-stack/stander/internal/admin/inout"
 	"github.com/lvgj-stack/stander/internal/admin/model"
 	"github.com/lvgj-stack/stander/internal/db"
+	"github.com/lvgj-stack/stander/internal/model/entity"
 	"github.com/lvgj-stack/stander/internal/utils"
 )
 
@@ -63,19 +64,20 @@ func (auth) Login(c context.Context, ctx *app.RequestContext) {
 		return
 	}
 
-	var info *model.User
-	db.Dao.Model(model.User{}).
+	var info entity.User
+	db.Dao.Model(entity.User{}).
 		Where("username =? ", params.Username).
 		Where("password=?", fmt.Sprintf("%x", md5.Sum([]byte(params.Password)))).
 		Find(&info)
-	if info.ID == 0 {
+	if info.ID == nil || *info.ID == 0 {
 		Resp.Err(ctx, 20001, "账号或密码不正确")
 		return
 	}
+	userID := int(*info.ID)
 
 	var roleIds, roleNames []string
 	db.Dao.Model(model.UserRolesRole{}).
-		Where("userId = ?", info.ID).
+		Where("userId = ?", userID).
 		Select("roleId").Find(&roleIds)
 	db.Dao.Model(model.Role{}).
 		Where("id in (?)", roleIds).Order("id asc").
@@ -86,7 +88,7 @@ func (auth) Login(c context.Context, ctx *app.RequestContext) {
 		currentRole = roleNames[0]
 	}
 	Resp.Succ(ctx, inout.LoginRes{
-		AccessToken: utils.GenerateToken(info.ID, info.ID, info.Username, currentRole, roleNames),
+		AccessToken: utils.GenerateToken(userID, userID, deref(info.Username), currentRole, roleNames),
 	})
 }
 
@@ -99,14 +101,14 @@ func (auth) Password(c context.Context, ctx *app.RequestContext) {
 	uid, _ := ctx.Get("uid")
 
 	var matched int64
-	db.Dao.Model(model.User{}).
+	db.Dao.Model(entity.User{}).
 		Where("id=? and password=?", uid, fmt.Sprintf("%x", md5.Sum([]byte(params.OldPassword)))).
 		Count(&matched)
 	if matched == 0 {
 		Resp.Err(ctx, 20001, "旧密码不正确")
 		return
 	}
-	if err := db.Dao.Model(model.User{}).
+	if err := db.Dao.Model(entity.User{}).
 		Where("id=? ", uid).
 		Update("password", fmt.Sprintf("%x", md5.Sum([]byte(params.NewPassword)))).Error; err != nil {
 		Resp.Err(ctx, 20001, err.Error())
