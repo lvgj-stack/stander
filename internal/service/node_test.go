@@ -42,7 +42,7 @@ func expectNodeInsert(mock sqlmock.Sqlmock, name, nodeType string) *capturedArg 
 		sqlmock.AnyArg(), // manager_ip
 		sqlmock.AnyArg(), // port
 		key,              // key
-		sqlmock.AnyArg(), // status
+		"unregistered",   // status: it has never registered, and says so
 		nodeType,         // node_type
 		sqlmock.AnyArg(), // ipv4
 		sqlmock.AnyArg(), // ipv6
@@ -184,6 +184,47 @@ func TestAddNodeStoresTheTrimmedName(t *testing.T) {
 
 	if _, err := AddNode(adminCtx(), &req.AddNodeReq{NodeName: "  hk-01  ", NodeType: "inbound", Rate: 1}); err != nil {
 		t.Fatalf("AddNode: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet expectations: %v", err)
+	}
+}
+
+// Registering is what turns a node's status from "never seen" into "its agent
+// has called home", and it has to happen on the registration the agent already
+// makes at start-up rather than needing anything restarted.
+func TestRegisterNodeMarksTheNodeRegistered(t *testing.T) {
+	mock := newMockDB(t)
+
+	mock.ExpectQuery("SELECT \\* FROM `nodes`").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "key"}).AddRow(7, "node-key"))
+	mock.ExpectQuery("SELECT \\* FROM `rules`").WillReturnRows(sqlmock.NewRows([]string{"id"}))
+	mock.ExpectQuery("SELECT \\* FROM `chains`").WillReturnRows(sqlmock.NewRows([]string{"id"}))
+
+	status := &capturedArg{}
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE `nodes`").WithArgs(
+		sqlmock.AnyArg(), // updated_at
+		sqlmock.AnyArg(), // ip
+		sqlmock.AnyArg(), // manager_ip
+		sqlmock.AnyArg(), // port
+		status,           // status
+		sqlmock.AnyArg(), // ipv4
+		sqlmock.AnyArg(), // ipv6
+		sqlmock.AnyArg(), // where key
+	).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	ctx := identity.NewContext(context.Background(), identity.Principal{NodeKey: "node-key"})
+	if _, err := RegisterNode(ctx, &req.RegisterNodeReq{Ipv4: "10.0.0.5", Port: 8123}, "10.0.0.5"); err != nil {
+		t.Fatalf("RegisterNode: %v", err)
+	}
+	// The literal, not the constant: these two strings are a contract with the
+	// console, which maps them to 未注册 / 已注册 from constants of its own.
+	// Asserting the constant against itself would let a rename on either side
+	// pass here while every node silently rendered as an em dash.
+	if status.value != "registered" {
+		t.Errorf("status written = %v, want %q", status.value, "registered")
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("unmet expectations: %v", err)

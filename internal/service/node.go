@@ -41,6 +41,24 @@ func checkUserNodePermission(ctx context.Context, nodeIds ...int64) error {
 	return nil
 }
 
+// What a node's status column can say.
+//
+// It answers one question — has this node's agent ever called home? — and
+// deliberately not "is it up right now". Nothing writes the column after
+// registration, so a node whose agent has since died still reads registered;
+// naming the value for the event rather than for a live condition is what
+// keeps the console from claiming something it cannot know. Telling
+// reachability apart from this needs a heartbeat or a last-seen time, and the
+// deployment has neither.
+//
+// These strings are a contract with the console, which maps them to 未注册 /
+// 已注册; the tests on both sides assert the literals. On what the column held
+// before it had any writer at all, see sql/migrate-2026-09-05-node-status.sql.
+const (
+	nodeStatusUnregistered = "unregistered"
+	nodeStatusRegistered   = "registered"
+)
+
 // validateAddNode checks a creation request and returns the node name with the
 // whitespace around it removed.
 //
@@ -96,11 +114,13 @@ func AddNode(ctx context.Context, r *req.AddNodeReq) (*resp.AddNodeResp, error) 
 	}
 
 	key := uuid.New().String()
+	status := nodeStatusUnregistered
 	if err := dal.Q.Node.WithContext(ctx).Create(&entity.Node{
 		NodeName: &name,
 		Key:      &key,
 		NodeType: &r.NodeType,
 		Rate:     r.Rate,
+		Status:   &status,
 	}); err != nil {
 		return nil, err
 	}
@@ -210,12 +230,16 @@ func RegisterNode(ctx context.Context, r *req.RegisterNodeReq, peerIP string) (*
 		}
 		res.Rules = append(res.Rules, ruleVo)
 	}
+	// The agent has just called home, which is the whole of what the status
+	// column claims to know.
+	status := nodeStatusRegistered
 	_, err = dal.Q.Node.WithContext(ctx).Where(dal.Node.Key.Eq(key)).Updates(entity.Node{
 		IP:        &clientIP,
 		Port:      &port,
 		Ipv4:      &ipv4,
 		Ipv6:      &ipv6,
 		ManagerIP: managerIp,
+		Status:    &status,
 	})
 	if err != nil {
 		return nil, err

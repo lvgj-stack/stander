@@ -8,6 +8,7 @@ import { Toolbar } from '@/components/data-table/toolbar'
 import { PageHeader } from '@/components/page-header'
 import { Badge } from '@/components/ui/badge'
 import { useTableParams } from '@/hooks/use-table-params'
+import { NodeStatusBadge } from '@/components/node-status-badge'
 import { orEmpty } from '@/lib/format'
 import type { Node } from '@/types/api'
 
@@ -66,18 +67,7 @@ export function MyNodesPage() {
     {
       accessorKey: 'status',
       header: '状态',
-      cell: ({ row }) => {
-        // The column has no enum; "online" is the only value treated as healthy.
-        const online = row.original.status === 'online'
-        return (
-          <Badge
-            variant={online ? 'default' : 'outline'}
-            className={online ? '' : 'text-muted-foreground'}
-          >
-            {online ? '在线' : orEmpty(row.original.status)}
-          </Badge>
-        )
-      },
+      cell: ({ row }) => <NodeStatusBadge status={row.original.status} />,
     },
   ]
 

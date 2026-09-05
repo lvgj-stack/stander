@@ -24,7 +24,9 @@ create table if not exists nodes
     manager_ip varchar(255)                not null default '',
     port       int                         null,
     `key`      varchar(255)                null,
-    status     varchar(255) default '8123' null,
+    -- 建节点时由 AddNode 写 'unregistered'，注册时 RegisterNode 改成 'registered'。
+    -- 没有默认值：这一列的取值一律由代码显式写入。
+    status     varchar(255)                null,
     node_type  varchar(255)                null,
     ipv4       varchar(255)                null,
     ipv6       varchar(255)                null,

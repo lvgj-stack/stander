@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useActionMutation } from '@/hooks/use-action-mutation'
 import { useTableParams } from '@/hooks/use-table-params'
+import { NodeStatusBadge } from '@/components/node-status-badge'
 import { formatTime, orEmpty } from '@/lib/format'
 import type { Node } from '@/types/api'
 
@@ -118,17 +119,7 @@ export function NodesPage() {
     {
       accessorKey: 'status',
       header: '状态',
-      cell: ({ row }) => {
-        const status = row.original.status
-        // The column has no enum; anything the agent last wrote shows as-is,
-        // and "online" is the only value treated as healthy.
-        const online = status === 'online'
-        return (
-          <Badge variant={online ? 'default' : 'outline'} className={online ? '' : 'text-muted-foreground'}>
-            {orEmpty(status)}
-          </Badge>
-        )
-      },
+      cell: ({ row }) => <NodeStatusBadge status={row.original.status} />,
     },
     {
       accessorKey: 'createdAt',
