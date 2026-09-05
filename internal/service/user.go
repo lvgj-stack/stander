@@ -159,10 +159,11 @@ func EditUser(ctx context.Context, r *req.EditUserReq) (*resp.EmptyResp, error) 
 // rules on.
 //
 // These are the `user_role_node_mappings` / `user_role_chain_mappings` rows
-// keyed by user id. Rows keyed by role code are deliberately left out: those
-// are what AddNode writes for a node an administrator created, they are not
-// held by any particular account, and showing them here would invite an
-// administrator to "revoke" a row this action cannot address.
+// keyed by user id. Rows keyed by role code are deliberately left out: they
+// are what AddNode used to write for a node an administrator created and
+// nothing writes any more, they are not held by any particular account, and
+// showing them here would invite an administrator to "revoke" a row this
+// action cannot address.
 func GetUserResources(ctx context.Context, r *req.GetUserResourcesReq) (*resp.GetUserResourcesResp, error) {
 	if err := requireSuperAdmin(ctx); err != nil {
 		return nil, err
@@ -190,8 +191,9 @@ func GetUserResources(ctx context.Context, r *req.GetUserResourcesReq) (*resp.Ge
 // that side is scoped to these rows — ListNode and ListChain filter on them,
 // checkUserNodePermission and checkUserChainPermission gate AddRule on them —
 // and the only other thing that ever created one was AddNode run by the user
-// themselves, which is now an administrator's screen. Without this action a
-// forwarding account sees an empty node list forever and can create nothing.
+// themselves, which it no longer does: creating a node is an administrator's
+// action and it grants nobody anything. Without this action a forwarding
+// account sees an empty node list forever and can create nothing.
 //
 // It is emphatically not the permission tree that was removed: that decided
 // which menu entries a role saw, in a table the router never consulted. This
@@ -210,8 +212,8 @@ func SetUserResources(ctx context.Context, r *req.SetUserResourcesReq) (*resp.Em
 	}
 
 	err := dal.Q.Transaction(func(tx *dal.Query) error {
-		// Only this user's own rows. The role-code rows an administrator's
-		// AddNode wrote belong to the role, not to anyone here.
+		// Only this user's own rows. The role-code rows left behind by the
+		// AddNode of the day belong to the role, not to anyone here.
 		if _, err := tx.UserRoleNodeMapping.WithContext(ctx).
 			Where(tx.UserRoleNodeMapping.UserID.Eq(r.UserId)).
 			Delete(&entity.UserRoleNodeMapping{}); err != nil {
