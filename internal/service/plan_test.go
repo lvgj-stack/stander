@@ -1,10 +1,13 @@
 package service
 
 import (
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/lvgj-stack/stander/internal/apperr"
 	"github.com/lvgj-stack/stander/internal/model/entity"
+	"github.com/lvgj-stack/stander/internal/service/req"
 )
 
 // Account creation sets these marks inside its own transaction rather than
@@ -51,5 +54,92 @@ func TestPlanPeriodEndNormalisesShortMonths(t *testing.T) {
 	want := time.Date(2026, 3, 3, 0, 0, 0, 0, time.UTC)
 	if !got.Equal(want) {
 		t.Fatalf("PlanPeriodEnd(Jan 31, month) = %s, want %s", got.Format("2006-01-02"), want.Format("2006-01-02"))
+	}
+}
+
+// The rules a create request has to pass before anything is written.
+//
+// They live in a plain function rather than in `vd:` tags so that they are
+// testable at all: a tag rule only runs when hertz binds a request, and
+// pinning it would mean standing up a request instead of calling a function.
+func TestValidateCreatePlan(t *testing.T) {
+	valid := func(mutate func(*req.CreatePlanReq)) *req.CreatePlanReq {
+		r := &req.CreatePlanReq{PlanName: "月付 100G", TotalTraffic: 100 << 30, Period: int32(entity.Month)}
+		if mutate != nil {
+			mutate(r)
+		}
+		return r
+	}
+
+	t.Run("accepts a well-formed request", func(t *testing.T) {
+		got, err := validateCreatePlan(valid(nil))
+		if err != nil {
+			t.Fatalf("validateCreatePlan() error = %v, want nil", err)
+		}
+		if got.name != "月付 100G" || got.traffic != 100<<30 || got.period != int32(entity.Month) {
+			t.Fatalf("validateCreatePlan() = %+v, want the request's own values", got)
+		}
+	})
+
+	// Otherwise 「月付」 and 「月付 」 are two different rows in a catalogue whose
+	// whole job is to be picked from a dropdown by name.
+	t.Run("trims the name", func(t *testing.T) {
+		got, err := validateCreatePlan(valid(func(r *req.CreatePlanReq) { r.PlanName = "  月付 100G\t" }))
+		if err != nil {
+			t.Fatalf("validateCreatePlan() error = %v, want nil", err)
+		}
+		if got.name != "月付 100G" {
+			t.Fatalf("name = %q, want %q", got.name, "月付 100G")
+		}
+	})
+
+	// Every period the enum defines has to be accepted, Month included — Month
+	// is 0, the value most likely to be dropped on the way here.
+	for name, period := range map[string]entity.PlanPeriod{
+		"month":     entity.Month,
+		"quarter":   entity.Quarter,
+		"half year": entity.HalfYear,
+		"year":      entity.Year,
+	} {
+		t.Run("accepts period "+name, func(t *testing.T) {
+			got, err := validateCreatePlan(valid(func(r *req.CreatePlanReq) { r.Period = int32(period) }))
+			if err != nil {
+				t.Fatalf("validateCreatePlan() error = %v, want nil", err)
+			}
+			if got.period != int32(period) {
+				t.Fatalf("period = %d, want %d", got.period, int32(period))
+			}
+		})
+	}
+
+	rejects := []struct {
+		name string
+		req  *req.CreatePlanReq
+	}{
+		{"an empty name", valid(func(r *req.CreatePlanReq) { r.PlanName = "" })},
+		{"a name that is only whitespace", valid(func(r *req.CreatePlanReq) { r.PlanName = "   \t" })},
+		// Longer than the varchar the column is. Rejected here so it comes back
+		// as something the operator can fix, rather than as the driver error
+		// apperr can only classify as Internal.
+		{"a name longer than the column", valid(func(r *req.CreatePlanReq) {
+			r.PlanName = strings.Repeat("套", planNameLimit+1)
+		})},
+		{"zero traffic", valid(func(r *req.CreatePlanReq) { r.TotalTraffic = 0 })},
+		{"negative traffic", valid(func(r *req.CreatePlanReq) { r.TotalTraffic = -1 })},
+		// The column is a plain int with no check constraint, so both of these
+		// store cleanly and only misbehave later, in the reset scheduler.
+		{"a period below the enum", valid(func(r *req.CreatePlanReq) { r.Period = -1 })},
+		{"a period above the enum", valid(func(r *req.CreatePlanReq) { r.Period = int32(entity.Year) + 1 })},
+	}
+	for _, tt := range rejects {
+		t.Run("rejects "+tt.name, func(t *testing.T) {
+			_, err := validateCreatePlan(tt.req)
+			if err == nil {
+				t.Fatalf("validateCreatePlan() error = nil, want a rejection")
+			}
+			if got := apperr.KindOf(err); got != apperr.InvalidArgument {
+				t.Fatalf("validateCreatePlan() kind = %v, want InvalidArgument", got)
+			}
+		})
 	}
 }

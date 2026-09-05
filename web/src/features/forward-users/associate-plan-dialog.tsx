@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Loader2Icon } from 'lucide-react'
+import { Loader2Icon, PlusIcon } from 'lucide-react'
 
 import { associatePlan, listPlans } from '@/api/plan'
+import { PlanFormDialog } from '@/features/plans/plan-form-dialog'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -43,6 +44,7 @@ export function AssociatePlanDialog({
 
 function Body({ user, onClose }: { user: ForwardUser; onClose: () => void }) {
   const [planId, setPlanId] = useState(() => (user.planId ? String(user.planId) : ''))
+  const [creating, setCreating] = useState(false)
 
   const plansQuery = useQuery({ queryKey: ['plans'], queryFn: listPlans })
 
@@ -63,7 +65,19 @@ function Body({ user, onClose }: { user: ForwardUser; onClose: () => void }) {
       </DialogHeader>
 
       <div className="space-y-2">
-        <Label>套餐</Label>
+        <div className="flex items-center justify-between">
+          <Label>套餐</Label>
+          {/*
+            Here rather than only on 流量套餐 because this is where the gap is
+            noticed: the operator came to give this user an allowance and the
+            dropdown has nothing that fits. Creating it in place also
+            associates it, so they leave with the thing they came for.
+          */}
+          <Button variant="ghost" size="sm" onClick={() => setCreating(true)}>
+            <PlusIcon />
+            新建套餐
+          </Button>
+        </div>
         <Select value={planId} onValueChange={setPlanId}>
           <SelectTrigger className="w-full">
             <SelectValue placeholder={plansQuery.isPending ? '加载中…' : '选择套餐'} />
@@ -88,6 +102,20 @@ function Body({ user, onClose }: { user: ForwardUser; onClose: () => void }) {
           保存
         </Button>
       </DialogFooter>
+
+      {/*
+        Given the user, creating already associates — the plan is live before
+        this dialog closes, and 取消 out here does not undo it. Selecting it
+        keeps the dropdown honest about what the user now has; pressing 保存
+        afterwards re-associates the same plan, which recomputes the expiry
+        from a fresh now rather than changing which plan they hold.
+      */}
+      <PlanFormDialog
+        open={creating}
+        onOpenChange={setCreating}
+        userId={user.id ?? undefined}
+        onCreated={(plan) => setPlanId(String(plan.id))}
+      />
     </>
   )
 }

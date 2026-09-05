@@ -163,6 +163,6 @@ Vue 前端的文件路径）、`icon`、`order`，前端在运行时据此建路
   只能新建和删除，改成员要删了重建。
 - `ListChainGroups` 只 select 了组 ID 和组名，拿不到组内链路，列表里看不到成员。
   它对非超级管理员还会直接返回空列表。
-- 套餐只有 `ListPlans` 和 `AssociatePlan`，没有增删改，要直接动
-  `traffic_plan` 表。
+- 套餐有 `ListPlans`、`CreatePlan` 和 `AssociatePlan`，没有改和删——套餐建完
+  只能靠再建一个新的取代，旧的会一直留在下拉里。
 - `EditChain` 只写 `chain_name`，所以链路只能改名，端口和节点要删了重建。

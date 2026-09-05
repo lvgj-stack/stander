@@ -142,6 +142,12 @@ type PlanTo struct {
 	*entity.TrafficPlan
 }
 
+// CreatePlanResp returns the plan that was just created, id included: the
+// console's inline create has to leave the operator on the new plan.
+type CreatePlanResp struct {
+	Plan *PlanTo
+}
+
 // GetUserResourcesResp lists the nodes and chains one user may build rules on.
 type GetUserResourcesResp struct {
 	NodeIds  []int64

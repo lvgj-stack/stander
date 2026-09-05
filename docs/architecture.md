@@ -158,7 +158,7 @@ panic——也带得上，而那恰恰是最需要查日志的几种。
 | 位置 | 管什么 |
 |---|---|
 | `middleware.SuperAdmin`（`api/admin_route.go`） | 账号管理那组路由：列表、新增、改、删、重置密码 |
-| `service.requireSuperAdmin` | 只有管理员能做的领域动作：`ListUsers`、`EditUser`、`ListPlans`、`AssociatePlan`、`AddChainGroup`、`DelChainGroup` |
+| `service.requireSuperAdmin` | 只有管理员能做的领域动作：`ListUsers`、`EditUser`、`ListPlans`、`CreatePlan`、`AssociatePlan`、`AddChainGroup`、`DelChainGroup` |
 | 各动作自己的归属检查 | `checkRuleOwnership`（`AddRule` / `ModifyRule` / `ModifyRules` / `DelRule` / `TestRule`）、`checkUserNodePermission`、`checkUserChainPermission`、`scopeToCaller` |
 
 ### 资源授权跟被删掉的权限树不是一回事

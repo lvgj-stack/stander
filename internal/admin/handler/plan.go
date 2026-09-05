@@ -29,6 +29,13 @@ func (plan) Handle(c context.Context, ctx *app.RequestContext) {
 			return
 		}
 		Resp.Succ(ctx, res)
+	case "CreatePlan":
+		res, err := call(c, ctx, service.CreatePlan)
+		if err != nil {
+			Resp.Fail(c, ctx, err)
+			return
+		}
+		Resp.Succ(ctx, res)
 	default:
 		unknownAction(c, ctx, action)
 	}

@@ -209,3 +209,22 @@ type AssociatePlanReq struct {
 	UserId int32 `json:"userId"`
 	PlanId int64 `json:"planId"`
 }
+
+// CreatePlanReq adds one plan to the catalogue, optionally associating it with
+// a user in the same transaction.
+//
+// Deliberately carries no `vd:` tags. Those only run when hertz binds a
+// request, so a rule written there is a rule the service layer does not have;
+// validateCreatePlan is the one gate, and the same rule written in both places
+// would drift.
+//
+// Period must never be marked omitempty: the first period is Month = 0, so
+// dropping the zero value would store a NULL period, and a NULL period means
+// the account expires the moment it is created.
+type CreatePlanReq struct {
+	PlanName     string `json:"planName"`
+	TotalTraffic int64  `json:"totalTraffic"`
+	Period       int32  `json:"period"`
+	// Optional. Nil adds the plan to the catalogue and nothing more.
+	UserId *int32 `json:"userId"`
+}
