@@ -20,9 +20,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Switch } from '@/components/ui/switch'
 import { useActionMutation } from '@/hooks/use-action-mutation'
-import { ADMIN_ROLE, useAuth } from '@/hooks/use-auth'
+import { useAuth } from '@/hooks/use-auth'
 import { useTableParams } from '@/hooks/use-table-params'
 import { formatTime, orEmpty } from '@/lib/format'
+import { ADMIN_ROLE } from '@/lib/roles'
 import type { AdminUser } from '@/types/api'
 
 import { AccountFormDialog } from './account-form-dialog'
@@ -93,7 +94,7 @@ export function AccountsPage() {
       id: 'side',
       header: '所属端',
       cell: ({ row }) => {
-        const admin = (row.original.roles ?? []).some((role) => role.code === ADMIN_ROLE)
+        const admin = row.original.role === ADMIN_ROLE
         return (
           <Badge variant={admin ? 'default' : 'secondary'} className="font-normal">
             {admin ? '管理端' : '用户端'}

@@ -11,7 +11,6 @@ import {
 } from './forward-user'
 import { associatePlan, listPlans } from './plan'
 import { addNode, deleteNode, getAgentInstallInfo, listNodes } from './node'
-import { listRoles } from './role'
 import { addRule, deleteRule, testRule } from './rule'
 import { listUsers } from './user'
 
@@ -187,13 +186,5 @@ describe('account endpoints keep the REST dialect', () => {
       url: '/user?pageNo=2&pageSize=20&username=ad',
       method: 'GET',
     })
-  })
-
-  // All that is left of the role API. The account form resolves SUPER_ADMIN
-  // and USER to ids through it, so a paged or filtered variant would only be a
-  // second way to ask the same question.
-  it('reads the whole role list from /role', async () => {
-    await listRoles()
-    expect(sent()).toMatchObject({ url: '/role', method: 'GET' })
   })
 })

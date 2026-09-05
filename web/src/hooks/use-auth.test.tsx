@@ -53,16 +53,13 @@ function stubDetail(data: unknown) {
   )
 }
 
-const SUPER_ADMIN = { id: 1, code: 'SUPER_ADMIN', name: '超级管理员', enable: true }
-const USER = { id: 4, code: 'USER', name: '普通用户', enable: true }
-
 beforeEach(() => clearToken())
 afterEach(() => vi.unstubAllGlobals())
 
 describe('which side an account belongs to', () => {
   it('puts SUPER_ADMIN on the admin side', async () => {
     setToken('jwt')
-    stubDetail({ id: 1, username: 'admin', roles: [SUPER_ADMIN, USER], currentRole: SUPER_ADMIN })
+    stubDetail({ id: 1, username: 'admin', role: 'SUPER_ADMIN' })
 
     renderProbe()
 
@@ -70,9 +67,9 @@ describe('which side an account belongs to', () => {
     expect(screen.getByTestId('side').textContent).toBe('admin')
   })
 
-  it('puts every other role on the user side', async () => {
+  it('puts USER on the user side', async () => {
     setToken('jwt')
-    stubDetail({ id: 3, username: 'user01', roles: [USER], currentRole: USER })
+    stubDetail({ id: 3, username: 'user01', role: 'USER' })
 
     renderProbe()
 
@@ -80,11 +77,14 @@ describe('which side an account belongs to', () => {
     expect(screen.getByTestId('side').textContent).toBe('user')
   })
 
-  // Switching role is how an admin previews the user portal, so the active
-  // role has to win over the roles the account merely holds.
-  it('follows the active role, not the roles the account holds', async () => {
+  // `role` is the role the *token* carries — identity.Principal.RoleCode, the
+  // only value the backend authorizes on. Anything it cannot place is already
+  // reported as USER (identity.NormalizeRole), so a code the console does not
+  // know must land on the user side rather than be waved through: the
+  // alternative renders admin screens that every API call answers as empty.
+  it('treats a role it does not know as a user', async () => {
     setToken('jwt')
-    stubDetail({ id: 1, username: 'admin', roles: [SUPER_ADMIN, USER], currentRole: USER })
+    stubDetail({ id: 9, username: 'orphan', role: 'ROLE_QA' })
 
     renderProbe()
 
@@ -92,24 +92,9 @@ describe('which side an account belongs to', () => {
     expect(screen.getByTestId('side').textContent).toBe('user')
   })
 
-  // The backend reads only the JWT's currentRoleCode, so the frontend must
-  // too. A token whose role no longer resolves — ROLE_QA, which the
-  // two-sides migration deletes — is scoped as a non-admin by every API call;
-  // routing it to the admin side would render screens that all come back
-  // empty.
-  it('does not fall back to held roles when no active role came back', async () => {
+  it('treats a missing role as a user', async () => {
     setToken('jwt')
-    stubDetail({ id: 1, username: 'admin', roles: [SUPER_ADMIN, USER], currentRole: null })
-
-    renderProbe()
-
-    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'))
-    expect(screen.getByTestId('side').textContent).toBe('user')
-  })
-
-  it('treats an account with no roles at all as a user', async () => {
-    setToken('jwt')
-    stubDetail({ id: 9, username: 'orphan', roles: null, currentRole: null })
+    stubDetail({ id: 9, username: 'orphan' })
 
     renderProbe()
 

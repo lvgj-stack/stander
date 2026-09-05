@@ -29,11 +29,10 @@ spec:
           - path: /user
             pathType: Prefix
             backend: *api
-          - path: /role
-            pathType: Prefix
-            backend: *api
-          # No /permission rule: those endpoints went away with the dynamic
-          # menu. Note that /user is an API prefix, which is why the user side
+          # No /permission or /role rule: those endpoints are gone — the first
+          # with the dynamic menu, the second when roles collapsed to the two
+          # the console names itself instead of fetching.
+          # Note that /user is an API prefix, which is why the user side
           # of the console lives at /portal — a /user rule here would swallow
           # its routes.
           - path: /stander

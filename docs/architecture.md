@@ -131,10 +131,12 @@ sequenceDiagram
 
 两个配套的约束：
 
-- **`/auth/current-role/switch/:role` 必须校验目标角色是调用者自己有的。** 这个
-  接口拿路径参数重新签一个 token，中间件再把 `currentRoleCode` 原样搬进
-  `Principal`——不校验的话，任何一个 token 都能一次请求换来 `SUPER_ADMIN`，上面
-  整张表就全空了。
+- **签发 token 的地方决定角色，没有第二处。** 只有登录会写 `currentRoleCode`，
+  取自账号在 `user_roles_role` 里的角色。曾经还有一个
+  `/auth/current-role/switch/:role`，拿路径参数重新签一个 token，而中间件把
+  `currentRoleCode` 原样搬进 `Principal`——一个漏掉的校验就意味着任何 token 都能
+  一次请求换来 `SUPER_ADMIN`。角色收敛成两个、一个账号一个之后它没有存在意义，
+  删掉比校验对更省心。
 - **列表接口要按调用者裁字段。** `entity.Node` / `entity.Chain` 会把 `key` 一起
   序列化出去，那是控制面命令 agent 用的凭证。非管理员的响应由
   `service.redactForCaller` 抹掉 `key` 和 `manager_ip`——前端不显示这两列不等于

@@ -17,12 +17,22 @@ var (
 )
 
 // CustomClaims 载荷，可以加一些自己需要的信息
+//
+// An account has exactly one role (identity.RoleSuperAdmin or
+// identity.RoleUser), so the token carries one. It used to carry a roleCodes
+// array as well, from the days when an account could hold several and switch
+// between them; the middleware only ever copied CurrentRoleCode into
+// identity.Principal, so the array authorized nothing.
+//
+// The JSON name stays `currentRoleCode` on purpose: renaming it would make
+// every already-issued token resolve to no role, which the backend reads as a
+// non-admin — silently demoting every signed-in administrator until their
+// token expired.
 type CustomClaims struct {
-	UID             int      `json:"UID,omitempty"`
-	UserId          int      `json:"userId,omitempty"`
-	Username        string   `json:"username,omitempty"`
-	RoleCodes       []string `json:"roleCodes,omitempty"`
-	CurrentRoleCode string   `json:"currentRoleCode,omitempty"`
+	UID             int    `json:"UID,omitempty"`
+	UserId          int    `json:"userId,omitempty"`
+	Username        string `json:"username,omitempty"`
+	CurrentRoleCode string `json:"currentRoleCode,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -57,28 +67,19 @@ func (j *JWT) createToken(claims CustomClaims) (string, error) {
 }
 
 // GenerateToken 生成令牌
-func GenerateToken(uId, userId int, username, currentRoleCode string, roleCodes []string) string {
+func GenerateToken(uId, userId int, username, roleCode string) string {
 	j := NewJWT()
-	type cus struct {
-		UID             int
-		UserId          int
-		Username        string
-		RoleCodes       []string
-		CurrentRoleCode string
-		jwt.RegisteredClaims
-	}
-	claims := cus{
-		uId,
-		userId,
-		username,
-		roleCodes,
-		currentRoleCode,
-		jwt.RegisteredClaims{
+	claims := CustomClaims{
+		UID:             uId,
+		UserId:          userId,
+		Username:        username,
+		CurrentRoleCode: roleCode,
+		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * 30 * time.Hour)),
 		},
 	}
 
-	token, err := j.createToken(CustomClaims(claims))
+	token, err := j.createToken(claims)
 	if err != nil {
 
 		return err.Error()

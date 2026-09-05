@@ -124,8 +124,8 @@ pnpm build        # 类型检查 + 构建到 web/dist
 
 ### 加一个页面
 
-控制台分两个端：管理端 `/admin/*`（`SUPER_ADMIN`）和用户端 `/portal/*`（其余角
-色）。加页面就是改两个文件：
+控制台分两个端：管理端 `/admin/*`（`SUPER_ADMIN`）和用户端 `/portal/*`（`USER`）。
+角色只有这两个。加页面就是改两个文件：
 
 1. `web/src/routes/index.tsx`——在对应那个端下面加一条路由
 2. `web/src/app/admin/admin-nav.tsx` 或 `web/src/app/user/user-nav.tsx`——加菜单项

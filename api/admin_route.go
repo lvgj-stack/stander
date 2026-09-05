@@ -14,9 +14,14 @@ import (
 //
 // It serves both sides of the frontend — the admin console and the user
 // portal. Which side a signed-in account gets is decided by its role, not by a
-// per-route permission lookup: SUPER_ADMIN gets the admin console, everyone
-// else the user portal, and the service layer scopes rows to the caller the
-// same way it always has (identity.Principal.IsSuperAdmin).
+// per-route permission lookup: SUPER_ADMIN gets the admin console, USER the
+// user portal, and the service layer scopes rows to the caller the same way it
+// always has (identity.Principal.IsSuperAdmin).
+//
+// There is no /role endpoint and no role switching. Both existed to serve a
+// model where an account could hold several roles out of an open-ended set;
+// there are two roles, an account has one, and the account form names them
+// directly instead of resolving ids out of a table.
 func RegisterAdmin(h *server.Hertz) {
 	// The session only carries the captcha id between /auth/captcha and /auth/login.
 	h.Use(sessions.New("mysession", cookie.NewStore([]byte("captch"))))
@@ -37,7 +42,6 @@ func RegisterAdmin(h *server.Hertz) {
 	// Pre-merge this pointed at Auth.Logout while the real handler was
 	// unexported and unreachable, so changing a password silently did nothing.
 	authed.POST("/auth/password", handler.Auth.Password)
-	authed.POST("/auth/current-role/switch/:role", handler.Auth.SwitchRole)
 
 	// Every signed-in account, on either side.
 	authed.GET("/user/detail", handler.User.Detail)
@@ -56,12 +60,6 @@ func RegisterAdmin(h *server.Hertz) {
 	admin.DELETE("/user/:id", handler.User.Delete)
 	admin.PATCH("/user/password/reset/:id", handler.User.Update)
 	admin.PATCH("/user/:id", handler.User.Update)
-
-	// Read-only, and administrators only: the account form uses it to pick
-	// which side of the console a user belongs to. Role CRUD and the whole
-	// /permission/* tree are gone — the console no longer builds its menu out
-	// of permission rows.
-	admin.GET("/role", handler.Role.List)
 
 	// The forwarding API. Both sides call these; the service layer scopes each
 	// action to the caller (identity.Principal.IsSuperAdmin), so the

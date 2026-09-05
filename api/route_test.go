@@ -33,7 +33,6 @@ func TestAdminRoutesAreRegistered(t *testing.T) {
 	}{
 		{http.MethodPost, "/auth/logout"},
 		{http.MethodPost, "/auth/password"},
-		{http.MethodPost, "/auth/current-role/switch/SUPER_ADMIN"},
 		{http.MethodGet, "/user"},
 		{http.MethodPost, "/user"},
 		{http.MethodDelete, "/user/1"},
@@ -41,7 +40,6 @@ func TestAdminRoutesAreRegistered(t *testing.T) {
 		{http.MethodPatch, "/user/1"},
 		{http.MethodPatch, "/user/profile/1"},
 		{http.MethodGet, "/user/detail"},
-		{http.MethodGet, "/role"},
 		{http.MethodPost, "/stander/node"},
 		{http.MethodPost, "/stander/chain"},
 		{http.MethodPost, "/stander/rule"},
@@ -96,6 +94,9 @@ func TestPermissionTreeRoutesAreGone(t *testing.T) {
 		method string
 		path   string
 	}{
+		// The listing is gone too: with two fixed roles the account form names
+		// them outright instead of fetching a table to resolve ids from.
+		{http.MethodGet, "/role"},
 		{http.MethodPost, "/role"},
 		{http.MethodPatch, "/role/1"},
 		{http.MethodDelete, "/role/1"},
@@ -126,7 +127,7 @@ func TestPermissionTreeRoutesAreGone(t *testing.T) {
 func TestAccountRoutesRequireSuperAdmin(t *testing.T) {
 	utils.SetJWTSigningKey("test-signing-key")
 	h := newServerUnderTest(t)
-	token := "Bearer " + utils.GenerateToken(3, 3, "user01", "USER", []string{"USER"})
+	token := "Bearer " + utils.GenerateToken(3, 3, "user01", "USER")
 
 	for _, r := range []struct {
 		method string
@@ -137,7 +138,6 @@ func TestAccountRoutesRequireSuperAdmin(t *testing.T) {
 		{http.MethodDelete, "/user/1"},
 		{http.MethodPatch, "/user/1"},
 		{http.MethodPatch, "/user/password/reset/1"},
-		{http.MethodGet, "/role"},
 	} {
 		t.Run(r.method+" "+r.path, func(t *testing.T) {
 			w := ut.PerformRequest(h.Engine, r.method, r.path, nil,
@@ -155,14 +155,13 @@ func TestAccountRoutesRequireSuperAdmin(t *testing.T) {
 func TestSelfServiceRoutesAcceptANonAdminToken(t *testing.T) {
 	utils.SetJWTSigningKey("test-signing-key")
 	h := newServerUnderTest(t)
-	token := "Bearer " + utils.GenerateToken(3, 3, "user01", "USER", []string{"USER"})
+	token := "Bearer " + utils.GenerateToken(3, 3, "user01", "USER")
 
 	for _, r := range []struct {
 		method string
 		path   string
 	}{
 		{http.MethodPost, "/auth/logout"},
-		{http.MethodPost, "/auth/current-role/switch/USER"},
 	} {
 		t.Run(r.method+" "+r.path, func(t *testing.T) {
 			w := ut.PerformRequest(h.Engine, r.method, r.path, nil,
@@ -175,24 +174,27 @@ func TestSelfServiceRoutesAcceptANonAdminToken(t *testing.T) {
 	}
 }
 
-// Switching role re-signs the token with whatever role was asked for, and the
-// middleware copies that straight into identity.Principal — so an unchecked
-// role name is a one-request path to SUPER_ADMIN, which is the single boundary
-// the service layer and the console's two sides both rest on.
-func TestSwitchRoleRejectsARoleTheAccountDoesNotHold(t *testing.T) {
+// Role switching re-signed the token with whatever role was asked for, and the
+// middleware copies that straight into identity.Principal — so the endpoint was
+// one request away from SUPER_ADMIN unless it checked, which is a check worth
+// not having to get right. An account has one role now; there is nothing to
+// switch to, and the route is gone rather than merely unlinked.
+func TestRoleSwitchingIsGone(t *testing.T) {
 	utils.SetJWTSigningKey("test-signing-key")
 	h := newServerUnderTest(t)
-	token := "Bearer " + utils.GenerateToken(3, 3, "user01", "USER", []string{"USER"})
+	token := "Bearer " + utils.GenerateToken(3, 3, "user01", "USER")
 
-	w := ut.PerformRequest(h.Engine, http.MethodPost, "/auth/current-role/switch/SUPER_ADMIN", nil,
-		ut.Header{Key: "Authorization", Value: token})
-
-	body := string(w.Result().Body())
-	if contains(body, `"accessToken"`) {
-		t.Fatalf("minted a SUPER_ADMIN token for an account that holds only USER: %s", body)
-	}
-	if !contains(body, "没有这个角色") {
-		t.Fatalf("expected the role check to reject this, got %s", body)
+	for _, path := range []string{
+		"/auth/current-role/switch/SUPER_ADMIN",
+		"/auth/current-role/switch/USER",
+	} {
+		t.Run(path, func(t *testing.T) {
+			w := ut.PerformRequest(h.Engine, http.MethodPost, path, nil,
+				ut.Header{Key: "Authorization", Value: token})
+			if got := w.Result().StatusCode(); got != http.StatusNotFound {
+				t.Fatalf("got status %d, want 404: %s", got, w.Result().Body())
+			}
+		})
 	}
 }
 

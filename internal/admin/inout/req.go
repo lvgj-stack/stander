@@ -18,7 +18,7 @@ type AuthPwReq struct {
 type PatchUserReq struct {
 	Id          int     `json:"id" vd:"$>0"`
 	Enable      *bool   `json:"enable,omitempty"`
-	RoleIds     *[]int  `json:"roleIds,omitempty"`
+	Role        *string `json:"role,omitempty" vd:"$==nil||($=='SUPER_ADMIN'||$=='USER')"`
 	Password    *string `json:"password,omitempty"`
 	Username    *string `json:"username,omitempty"`
 	OldPassword *string `json:"oldPassword,omitempty"`
@@ -32,15 +32,10 @@ type PatchProfileUserReq struct {
 	Email    string `json:"email"`
 	Avatar   string `json:"avatar"`
 }
-type EnableRoleReq struct {
-	Enable bool `json:"enable"`
-	Id     int  `json:"id"`
-}
-
 type AddUserReq struct {
 	Username string `json:"username" vd:"len($)>0"`
 	Password string `json:"password" vd:"len($)>0"`
 	Enable   bool   `json:"enable"`
-	RoleIds  []int  `json:"roleIds" vd:"len($)>0"`
+	Role     string `json:"role" vd:"$=='SUPER_ADMIN'||$=='USER'"`
 	PlanId   int32  `json:"planId"`
 }

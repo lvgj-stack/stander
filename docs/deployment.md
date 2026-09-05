@@ -48,7 +48,7 @@ Ingress 把 API 前缀直接路由到 `stander` Service，其余交给 `stander-
 
 | 路径 | 去向 |
 |---|---|
-| `/auth`、`/user`、`/role`、`/stander` | `stander`（控制台 API） |
+| `/auth`、`/user`、`/stander` | `stander`（控制台 API） |
 | `/api/v1` | `stander`（agent 回调、gost 上报） |
 | 其余 | `stander-web`（单页应用：`/admin/*` 管理端、`/portal/*` 用户端） |
 

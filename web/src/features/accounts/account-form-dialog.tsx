@@ -1,11 +1,9 @@
 import { useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { Loader2Icon, ShieldCheckIcon, UserIcon } from 'lucide-react'
 import { z } from 'zod'
 
-import { listRoles } from '@/api/role'
 import { addUser, updateUser } from '@/api/user'
 import { Button } from '@/components/ui/button'
 import {
@@ -28,12 +26,10 @@ import {
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { useActionMutation } from '@/hooks/use-action-mutation'
-import { ADMIN_ROLE, useAuth } from '@/hooks/use-auth'
+import { useAuth } from '@/hooks/use-auth'
+import { ADMIN_ROLE, USER_ROLE } from '@/lib/roles'
 import { cn } from '@/lib/utils'
 import type { AdminUser } from '@/types/api'
-
-/** The role that puts an account on the user side. */
-const USER_ROLE = 'USER'
 
 const schema = z.object({
   username: z.string().min(1, '请输入用户名'),
@@ -58,6 +54,11 @@ interface AccountFormDialogProps {
  * permission rows it used to own, which the previous frontend turned into
  * menus, are gone — and letting someone tick an arbitrary combination of roles
  * only ever produced accounts whose side depended on which role sorted first.
+ *
+ * It sends the role code. It used to fetch /role first, to translate that code
+ * into whichever id this database numbered the row with; the lookup — and the
+ * endpoint behind it — belonged to a world where roles were data the console
+ * discovered rather than two things it already knows.
  */
 export function AccountFormDialog({ open, onOpenChange, account }: AccountFormDialogProps) {
   const { user } = useAuth()
@@ -67,11 +68,6 @@ export function AccountFormDialog({ open, onOpenChange, account }: AccountFormDi
   // screen. If you are the only administrator, nothing short of SQL brings the
   // admin side back.
   const isSelf = editing && account?.id === user?.id
-
-  // The `user` table stores role ids, so the two codes have to be resolved to
-  // whatever ids this database happens to use.
-  const rolesQuery = useQuery({ queryKey: ['roles'], queryFn: listRoles, enabled: open })
-  const roleIdFor = (code: string) => rolesQuery.data?.find((role) => role.code === code)?.id
 
   const form = useForm<AccountValues>({
     resolver: zodResolver(schema),
@@ -84,33 +80,26 @@ export function AccountFormDialog({ open, onOpenChange, account }: AccountFormDi
       username: account?.username ?? '',
       password: '',
       enable: account?.enable ?? true,
-      side: (account?.roles ?? []).some((role) => role.code === ADMIN_ROLE) ? 'admin' : 'user',
+      side: account?.role === ADMIN_ROLE ? 'admin' : 'user',
     })
   }, [open, account, form])
 
   const mutation = useActionMutation({
     mutationFn: (values: AccountValues) => {
-      const roleId = roleIdFor(values.side === 'admin' ? ADMIN_ROLE : USER_ROLE)
-      if (roleId === undefined) {
-        // Without the role row the account would be created with no side at
-        // all, which reads as a user portal account with an empty profile.
-        throw new Error(
-          `数据库里没有 ${values.side === 'admin' ? ADMIN_ROLE : USER_ROLE} 角色，先执行 sql/init.sql`,
-        )
-      }
+      const role = values.side === 'admin' ? ADMIN_ROLE : USER_ROLE
       if (account) {
         return updateUser({
           id: account.id,
           username: values.username,
           enable: values.enable,
-          roleIds: [roleId],
+          role,
         })
       }
       return addUser({
         username: values.username,
         password: values.password,
         enable: values.enable,
-        roleIds: [roleId],
+        role,
       })
     },
     successMessage: editing ? '账号已更新' : '账号已创建',
@@ -193,9 +182,6 @@ export function AccountFormDialog({ open, onOpenChange, account }: AccountFormDi
                       hint="节点、链路、套餐与账号"
                     />
                   </div>
-                  {rolesQuery.isPending && (
-                    <FormDescription>正在读取角色…</FormDescription>
-                  )}
                   <FormMessage />
                 </FormItem>
               )}

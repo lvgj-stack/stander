@@ -15,9 +15,10 @@ export default defineConfig({
     // AllowAllOrigins, but the captcha needs its session cookie to survive
     // the round trip, so proxying keeps everything same-origin in dev.
     proxy: {
-      // Must stay in sync with nginx.conf. `permission` is absent on purpose:
-      // those endpoints were removed with the dynamic menu.
-      '^/(auth|user|role|stander)(/|$)': {
+      // Must stay in sync with nginx.conf. `permission` and `role` are absent
+      // on purpose: those endpoints are gone — the first with the dynamic
+      // menu, the second when roles collapsed to two the console names itself.
+      '^/(auth|user|stander)(/|$)': {
         target: process.env.VITE_DEV_PROXY_TARGET ?? 'http://127.0.0.1:8123',
         changeOrigin: false,
       },

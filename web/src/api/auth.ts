@@ -16,7 +16,3 @@ export const logout = () => api.post<boolean>('/auth/logout')
 
 export const changePassword = (oldPassword: string, newPassword: string) =>
   api.post<boolean>('/auth/password', { oldPassword, newPassword })
-
-/** Swaps the active role, which mints a token carrying the new role code. */
-export const switchRole = (roleCode: string) =>
-  api.post<LoginResult>(`/auth/current-role/switch/${encodeURIComponent(roleCode)}`)

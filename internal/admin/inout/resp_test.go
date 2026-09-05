@@ -14,9 +14,12 @@ import (
 // admin console has always received. Adding or renaming a key here is a
 // frontend-visible change and should be a deliberate one.
 func TestUserDetailResJSONShape(t *testing.T) {
+	// `roles` and `currentRole` collapsed into one `role`: an account has one
+	// role and cannot switch, so the array and the "which of them is active"
+	// pointer had nothing left to express.
 	want := []string{
-		"createTime", "currentRole", "enable", "id",
-		"password", "profile", "roles", "updateTime", "username",
+		"createTime", "enable", "id",
+		"password", "profile", "role", "updateTime", "username",
 	}
 
 	raw, err := json.Marshal(UserDetailRes{})
@@ -102,9 +105,12 @@ func TestUserListItemJSONShape(t *testing.T) {
 	if err := json.Unmarshal(raw, &got); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	for _, k := range []string{"id", "username", "enable", "createTime", "updateTime", "gender", "avatar", "address", "email", "roles"} {
+	for _, k := range []string{"id", "username", "enable", "createTime", "updateTime", "gender", "avatar", "address", "email", "role"} {
 		if _, ok := got[k]; !ok {
 			t.Errorf("UserListItem lost the %q key", k)
 		}
+	}
+	if _, ok := got["roles"]; ok {
+		t.Error("the roles array is gone: an account has one role")
 	}
 }

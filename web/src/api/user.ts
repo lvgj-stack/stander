@@ -1,3 +1,4 @@
+import type { RoleCode } from '@/lib/roles'
 import type { AdminUser, CurrentUser, Page } from '@/types/api'
 
 import { api } from './client'
@@ -19,7 +20,8 @@ export interface AddUserParams {
   username: string
   password: string
   enable: boolean
-  roleIds: number[]
+  /** Which side the account lands on. The backend resolves it to a role row. */
+  role: RoleCode
   planId?: number
 }
 
@@ -28,7 +30,7 @@ export const addUser = (params: AddUserParams) => api.post<null>('/user', params
 export interface UpdateUserParams {
   id: number
   enable?: boolean
-  roleIds?: number[]
+  role?: RoleCode
   username?: string
   password?: string
 }
