@@ -23,7 +23,7 @@ import { formatBytes, orEmpty } from '@/lib/format'
  * does need rows, so it asks for one page of them.
  */
 export function DashboardPage() {
-  const { user, codes } = useAuth()
+  const { user } = useAuth()
 
   const nodes = useQuery({
     queryKey: ['dashboard', 'nodes'],
@@ -49,10 +49,7 @@ export function DashboardPage() {
 
   return (
     <>
-      <PageHeader
-        title={`欢迎回来，${user?.username ?? ''}`}
-        description={`当前角色：${user?.currentRole?.name ?? '—'}`}
-      />
+      <PageHeader title={`欢迎回来，${user?.username ?? ''}`} description="管理端总览。" />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
@@ -61,7 +58,7 @@ export function DashboardPage() {
           loading={nodes.isPending}
           error={Boolean(nodes.error)}
           icon={ServerIcon}
-          to={codes.has('Server') ? '/nodes' : undefined}
+          to="/admin/nodes"
         />
         <StatCard
           label="链路"
@@ -69,7 +66,7 @@ export function DashboardPage() {
           loading={chains.isPending}
           error={Boolean(chains.error)}
           icon={WaypointsIcon}
-          to={codes.has('Chain') ? '/chains' : undefined}
+          to="/admin/chains"
         />
         <StatCard
           label="转发规则"
@@ -77,7 +74,7 @@ export function DashboardPage() {
           loading={rules.isPending}
           error={Boolean(rules.error)}
           icon={RouteIcon}
-          to={codes.has('Rule') ? '/rules' : undefined}
+          to="/admin/rules"
         />
         <StatCard
           label="转发用户"
@@ -85,7 +82,7 @@ export function DashboardPage() {
           loading={users.isPending}
           error={Boolean(users.error)}
           icon={UsersIcon}
-          to={codes.has('ForwardUser') ? '/forward-users' : undefined}
+          to="/admin/forward-users"
         />
       </div>
 
@@ -140,28 +137,28 @@ function StatCard({
   loading: boolean
   error: boolean
   icon: LucideIcon
-  to?: string
+  to: string
 }) {
-  const body = (
-    <Card className="transition-colors hover:border-primary/40">
-      <CardContent className="flex items-center gap-4">
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-          <Icon className="size-5 text-muted-foreground" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm text-muted-foreground">{label}</p>
-          {loading ? (
-            <Skeleton className="mt-1 h-7 w-12" />
-          ) : error ? (
-            <p className="text-sm text-destructive">读取失败</p>
-          ) : (
-            <p className="tabular text-2xl font-semibold">{value ?? 0}</p>
-          )}
-        </div>
-        {to && <ArrowRightIcon className="size-4 shrink-0 text-muted-foreground" />}
-      </CardContent>
-    </Card>
+  return (
+    <Link to={to}>
+      <Card className="transition-colors hover:border-primary/40">
+        <CardContent className="flex items-center gap-4">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+            <Icon className="size-5 text-muted-foreground" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm text-muted-foreground">{label}</p>
+            {loading ? (
+              <Skeleton className="mt-1 h-7 w-12" />
+            ) : error ? (
+              <p className="text-sm text-destructive">读取失败</p>
+            ) : (
+              <p className="tabular text-2xl font-semibold">{value ?? 0}</p>
+            )}
+          </div>
+          <ArrowRightIcon className="size-4 shrink-0 text-muted-foreground" />
+        </CardContent>
+      </Card>
+    </Link>
   )
-
-  return to ? <Link to={to}>{body}</Link> : body
 }

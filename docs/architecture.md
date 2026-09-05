@@ -6,7 +6,7 @@ Stander 是一个端口转发系统，一个二进制通过 cobra 子命令决�
 
 | 子命令 | 职责 | 副本数 |
 |---|---|---|
-| `stander server` | HTTP API：管理后台（根路径）+ 控制面（`/api/v1`） | 可任意扩 |
+| `stander server` | HTTP API：控制台（根路径）+ 控制面（`/api/v1`） | 可任意扩 |
 | `stander worker` | 单例后台任务：推进用户流量周期、下发转发链 | **必须恰好 1 个** |
 | `stander agent` | 跑在转发节点上，执行实际的端口转发 | 每个转发节点 1 个 |
 | `stander gen` | 从数据库重新生成 gorm-gen 代码 | 一次性 |
@@ -33,10 +33,10 @@ graph TB
 api/                    HTTP 层：路由、参数绑定、action 分发、响应信封
   ├─ route.go           路由注册 + ControllerIdentity / AgentAuth 中间件
   ├─ dispatch.go        控制面 action 分发（泛型 call 辅助函数收口绑定）
-  ├─ admin_route.go     管理后台路由
+  ├─ admin_route.go     控制台路由（两个端共用）
   └─ health.go          /healthz · /readyz
 internal/
-  ├─ admin/             管理后台：handler / inout / middleware / model
+  ├─ admin/             控制台后端：handler / inout / middleware / model
   ├─ service/           领域逻辑（不依赖任何 web 框架）
   ├─ worker/            单例后台任务
   ├─ identity/          调用方身份（类型化 Principal，走 context.Context）
@@ -71,7 +71,7 @@ got, err := service.ListChainGroup(ctx, &req.ListChainGroupReq{})   // 没有 se
 
 ## 请求怎么流动
 
-管理后台的 `/stander/*` 是给前端用的门面。它在**进程内**直接调用
+控制台的 `/stander/*` 是给前端用的门面。它在**进程内**直接调用
 `internal/service`：
 
 ```mermaid
@@ -97,6 +97,35 @@ sequenceDiagram
 `X-User-Id` / `X-Role-Id` 请求头（`ControllerIdentity` 中间件），响应信封是
 `{Result}` 而不是 `{code, message, data}`。两种信封都是历史形成的，前端依赖，
 没有改。
+
+## 授权边界
+
+只有一条：`identity.Principal.IsSuperAdmin()`，也就是 JWT 里的
+`currentRoleCode` 是不是 `SUPER_ADMIN`。前端的两个端就是按它分的，所以它必须在
+服务端真的拦得住东西——两个端由同一套 API 提供服务，用户端的账号手里握着的是一
+个对每条路由都有效的 token，"用户端界面上没有这个入口"不构成任何限制。
+
+它落在三个地方：
+
+| 位置 | 管什么 |
+|---|---|
+| `middleware.SuperAdmin`（`api/admin_route.go`） | 账号管理那组路由：列表、新增、改、删、重置密码、`GET /role` |
+| `service.requireSuperAdmin` | 只有管理员能做的领域动作：`ListUsers`、`EditUser`、`ListPlans`、`AssociatePlan`、`AddChainGroup`、`DelChainGroup` |
+| 各动作自己的归属检查 | `checkRuleOwnership`（`AddRule` / `ModifyRule` / `ModifyRules` / `DelRule` / `TestRule`）、`checkUserNodePermission`、`checkUserChainPermission`、`scopeToCaller` |
+
+把路由级的那层放在路由表里是有意的：读 `api/admin_route.go` 就能看出哪些接口属
+于哪个端，不用去翻每个 handler。
+
+两个配套的约束：
+
+- **`/auth/current-role/switch/:role` 必须校验目标角色是调用者自己有的。** 这个
+  接口拿路径参数重新签一个 token，中间件再把 `currentRoleCode` 原样搬进
+  `Principal`——不校验的话，任何一个 token 都能一次请求换来 `SUPER_ADMIN`，上面
+  整张表就全空了。
+- **列表接口要按调用者裁字段。** `entity.Node` / `entity.Chain` 会把 `key` 一起
+  序列化出去，那是控制面命令 agent 用的凭证。非管理员的响应由
+  `service.redactForCaller` 抹掉 `key` 和 `manager_ip`——前端不显示这两列不等于
+  它们没发出去。
 
 ## 为什么 worker 必须是单例
 
@@ -126,23 +155,56 @@ cookie 只带 id。多副本下签发和校验通常不在同一个副本，登�
 
 ## 数据库
 
-`sql/init.sql` 是唯一的建表脚本，15 张表。`internal/model/entity` 与
+`sql/init.sql` 是唯一的建表脚本，14 张表。`internal/model/entity` 与
 `internal/model/dal` 是 gorm-gen 从数据库反向生成的，不要手改——改表结构后跑
 `stander gen` 重新生成。
 
-管理后台的 `role` / `permission` / `profile` 和两张关联表在 gorm-gen 侧没有产
-物，是 `internal/admin/model` 下手写的 gorm 模型。`user` 表**只有** gorm-gen 
-的 `entity.User` 一份定义。
+`role` / `profile` 和 `user_roles_role` 在 gorm-gen 侧没有产物，是
+`internal/admin/model` 下手写的 gorm 模型。`user` 表**只有** gorm-gen 的
+`entity.User` 一份定义。
+
+原来还有 `permission` 和 `role_permissions_permission` 两张表，存的是上一版 Vue
+前端的菜单树。前端不再按它建路由，两张表也就没有了读者，已经删掉；已有的库用
+`sql/migrate-2026-09-05-two-sides.sql` 清理。
 
 ## 前端
 
-`web/` 是管理后台的界面：React + TypeScript + shadcn/ui，构建成静态站点，
-和 Go 二进制彻底分开——不 embed、不打进同一个镜像、可以独立发布。
+`web/` 是控制台：React + TypeScript + shadcn/ui，构建成静态站点，和 Go 二进制
+彻底分开——不 embed、不打进同一个镜像、可以独立发布。
 
-它只调管理后台那组接口（根路径下的 `/auth`、`/user`、`/role`、`/permission`、
-`/stander`），`/api/v1` 那组是给 agent 和 gost 用的，前端不碰。
+### 两个端
 
-后端为此**没有任何改动**。前端要迁就的是既有接口的三个特点：
+一个站点，两套写死的路由，登录后按角色分流：
+
+| 端 | 路径 | 谁进得来 | 有什么 |
+|---|---|---|---|
+| 管理端 | `/admin/*` | `SUPER_ADMIN` | 仪表盘、节点、链路、链路组、转发规则、流量套餐、转发用户、账号管理 |
+| 用户端 | `/portal/*` | 其余所有角色 | 自己的流量与套餐、自己的转发规则、可用节点、个人资料 |
+
+分流点只有一个：`identity.Principal.IsSuperAdmin()`。后端本来就只有这一条授权
+边界——service 层要么把行限制在调用者自己的 `user_id` / 授权映射上，要么放开——
+所以前端也就只有两个端，不多不少。前端的 `RequireSide` 只是把人送到属于他的那
+一边，真正拦住越权的是 service 层，用户直接敲管理端的 URL 也拿不到别人的行。
+
+菜单是两个常量：`web/src/app/admin/admin-nav.tsx` 和
+`web/src/app/user/user-nav.tsx`，就放在路由表 `web/src/routes/index.tsx` 旁边。
+
+**用户端在 `/portal` 而不是 `/user`**：`/user` 是账号接口的前缀，Ingress、
+`web/nginx.conf` 和 vite 的 dev proxy 都会把它整个路由到后端，`/user/profile`
+会打到 API 而不是前端。
+
+这套东西以前是动态的：后端返回一棵 `permission` 树，每行带 `path`、`component`
+（上一版 Vue 的文件路径）、`icon`、`order`，前端在运行时据此建路由和 tab。结果
+是"页面存在"和"菜单可见"由两个地方分别决定，可以互相打架——新增一个页面必须同
+时补一条数据库记录，漏了就是对谁都不可见，包括超级管理员（它拿到的是"所有顶级
+记录"，不是"全部权限"）。现在路由表就是唯一的真相。
+
+### 接口
+
+它只调控制台那组接口（根路径下的 `/auth`、`/user`、`/role`、`/stander`），
+`/api/v1` 那组是给 agent 和 gost 用的，前端不碰。
+
+前端要迁就的是既有接口的三个特点：
 
 - **业务失败时 HTTP 状态码仍然是 200**，成功与否只能看信封里的 `code`。
 - **验证码的答案在服务端**（现在是 `captcha` 表），图片本身不含答案，
@@ -152,8 +214,3 @@ cookie 只带 id。多副本下签发和校验通常不在同一个副本，登�
 推荐把前端和 API 放在同一个 origin 后面（`web/nginx.conf` 就是这么反代的）。
 后端虽然开了 `AllowAllOrigins`，但跨域下验证码的 session cookie 还需要
 `SameSite=None` 才能带上，同源部署省掉这一整类问题。
-
-菜单权限沿用 `permission` 表，但只用 `code`：那张表的 `component` 列存的是上一版
-Vue 前端的文件路径，React 这边用不上，路由表是静态写在前端代码里的。
-新增页面要在 `permission` 表补一条记录，否则菜单对谁都不可见——超级管理员看到的是
-"所有顶级记录"，不是"全部权限"。`sql/web_menu.sql` 补的就是这个。

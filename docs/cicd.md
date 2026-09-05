@@ -24,7 +24,7 @@ pnpm 版本由 `web/package.json` 的 `packageManager` 字段决定，两边不�
 
 1. 构建 `stander` 和 `stander-web` 两个镜像
 2. 起一个 [kind](https://kind.sigs.k8s.io) 集群，把镜像 side-load 进去
-3. 从 `sql/init.sql` 和 `sql/web_menu.sql` 建出 schema ConfigMap
+3. 从 `sql/init.sql` 建出 schema ConfigMap
 4. `kubectl apply -k deploy/k8s/overlays/dev`——和人手部署用的是同一份清单
 5. 等三个 Deployment 全部 rollout 完成
 6. 用 HTTP 真跑一遍
@@ -34,14 +34,14 @@ pnpm 版本由 `web/package.json` 的 `packageManager` 字段决定，两边不�
 - `/healthz` 与 `/readyz`。后者会连数据库，200 才说明 Pod 真能连上 MySQL——
   `/healthz` 是故意不查库的。
 - `/metrics` 里有 `stander_` 开头的指标。
-- 控制台返回 SPA，且 `/pms/role` 这类客户端路由能 fallback 到 index.html
+- 控制台返回 SPA，且 `/admin/nodes` 这类客户端路由能 fallback 到 index.html
   （否则用户在任何页面刷新都是 404）。
 - 验证码返回的是图片，**并且带上了 session cookie**。答案在 cookie 里不在图里，
   cookie 丢了登录就永远不可能成功。
 - 登录请求打到 handler 并被验证码拒绝。这里解不出验证码，但"被验证码拒绝"
   恰好证明路由、JSON 绑定、数据库查询这条链路是通的——路由错了会是 404 或 502。
-- `permission` 表里有 `sql/web_menu.sql` 插的三条记录，否则控制台那三个菜单
-  对谁都不可见。
+- `role` 表里有 `SUPER_ADMIN` 和 `USER` 两条记录。登录后进哪个端由角色决定，
+  缺了 `SUPER_ADMIN` 就没人能进管理端。
 - `stander-worker` 在 dev overlay 里副本数是 0。worker 必须全局恰好一个实例，
   这条不变量值得被机器盯着。
 
@@ -159,14 +159,17 @@ kubectl -n stander set image deploy/stander-agent stander=ghcr.io/<owner>/stande
 `go-version`。三者漂开的表现是构建时静默下载另一个 toolchain，很难查。
 （这个仓库出现过：go.mod 要 1.25，Dockerfile 却写 1.24。）
 
-## API 前缀列在两个地方
+## API 前缀列在三个地方
 
-后端的管理接口前缀——`/auth`、`/user`、`/role`、`/permission`、`/stander`——
-出现在两处：
+后端的控制台接口前缀——`/auth`、`/user`、`/role`、`/stander`——出现在三处：
 
 - `deploy/k8s/overlays/prod/ingress.yaml`：Kubernetes 里由 Ingress 直接把这些
   路径路由到 stander Service
 - `web/nginx.conf`：web 镜像自己反代时用（docker compose、单独 docker run）
+- `web/vite.config.ts`：vite dev server 的 proxy
 
-加新前缀要改两处。`/api/v1`（agent 回调和 gost 上报）只在 Ingress 里，
+前端自己的路由必须绕开这张清单：用户端在 `/portal/*` 而不是 `/user/*`，就是
+因为 `/user` 已经被账号接口占了。
+
+加新前缀三处都要改。`/api/v1`（agent 回调和 gost 上报）只在 Ingress 里，
 控制台不碰它。

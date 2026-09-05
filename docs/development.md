@@ -57,7 +57,7 @@ case "PingNode":
     res, err = call(c, ctx, service.PingNode)
 ```
 
-泛型的 `call` 负责绑定请求体，所以这里就一行。如果这个动作也要暴露给管理后台，
+泛型的 `call` 负责绑定请求体，所以这里就一行。如果这个动作也要暴露给控制台，
 在 `internal/admin/handler/node.go` 的 switch 里加一个 case，同样用 `call`，再把
 结果包成后台的 `{code, message, data}` 信封。
 
@@ -121,6 +121,17 @@ pnpm build        # 类型检查 + 构建到 web/dist
 
 需要 Node 24（`web/.nvmrc`），包管理器版本由 `packageManager` 字段钉死。
 细节和后端接口的几个坑见 [web/README.md](../web/README.md)。
+
+### 加一个页面
+
+控制台分两个端：管理端 `/admin/*`（`SUPER_ADMIN`）和用户端 `/portal/*`（其余角
+色）。加页面就是改两个文件：
+
+1. `web/src/routes/index.tsx`——在对应那个端下面加一条路由
+2. `web/src/app/admin/admin-nav.tsx` 或 `web/src/app/user/user-nav.tsx`——加菜单项
+
+**不需要往数据库里补记录。** 早先菜单是后端 `permission` 表的一棵树在运行时建出
+来的，加页面必须同时插一行，漏了菜单对谁都不可见；那套机制已经删掉了。
 
 ## 在 Kubernetes 上跑一遍
 

@@ -71,12 +71,20 @@
 ```
 
 ### ----- 以下接口在 header 头中必带 -------
+
+下面标了 **仅管理员** 的接口要求 `currentRoleCode` 是 `SUPER_ADMIN`，否则返回
+`{"code":403}`。两个端共用这一套 API，用户端的账号持有的 token 对每条路由都是
+合法的，所以这条线只能在服务端画。
 ```
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6MTcwNDk0NzgyMX0.Vkwe1P5JN4s0VxbMmJnA8l0JW5tWFkaicLV6SztJYvU
 
 ```
 
 ### 用户-详情 get : /api/user/detail
+
+`currentRole.code` 决定登录后进哪个端：`SUPER_ADMIN` 进管理端，其余（包括
+`currentRole` 为 null）进用户端。前后端读的是同一个值——后端的
+`identity.Principal.RoleCode` 就是 JWT 里的 `currentRoleCode`。
 
 **request**
 
@@ -109,12 +117,6 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
                 "code":"SUPER_ADMIN",
                 "name":"超级管理员",
                 "enable":true
-            },
-            {
-                "id":2,
-                "code":"ROLE_QA",
-                "name":"质检员",
-                "enable":true
             }
         ],
         "currentRole":{
@@ -129,350 +131,19 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
 ```
 
 
-### 角色-菜单权限 get : /api/role/permissions/tree
+### 已删除的接口
 
-**request**
+`/role/permissions/tree`、`/role/page`、角色的增删改、给角色分配用户，以及
+整组 `/permission/*`，都随动态菜单一起删了。
 
--
+前端曾经把 `permission` 表当菜单树读：每行带 `path`、`component`、`icon`、
+`order`，登录后拉回来在运行时建路由和 tab。现在两个端（用户端 `/portal/*`、
+管理端 `/admin/*`）的路由都写死在前端代码里，角色只剩一个作用：决定登录后
+进哪个端。`GET /role` 保留，账号表单用它把 SUPER_ADMIN / USER 解析成角色 id。
 
-**response**
-```
-{
-    "code":0,
-    "message":"OK",
-    "data":[
-        {
-            "id":9,
-            "name":"基础功能",
-            "code":"Base",
-            "type":"MENU",
-            "parentId":null,
-            "path":"/base",
-            "redirect":"",
-            "icon":"i-fe:grid",
-            "component":"",
-            "layout":"",
-            "keepAlive":0,
-            "method":"",
-            "description":"",
-            "show":1,
-            "enable":1,
-            "order":0,
-            "children":[
-                {
-                    "id":14,
-                    "name":"图标 Icon",
-                    "code":"Icon",
-                    "type":"MENU",
-                    "parentId":9,
-                    "path":"/base/icon",
-                    "redirect":"",
-                    "icon":"i-fe:feather",
-                    "component":"/src/views/base/unocss-icon.vue",
-                    "layout":"",
-                    "keepAlive":0,
-                    "method":"",
-                    "description":"",
-                    "show":1,
-                    "enable":1,
-                    "order":0,
-                    "children":[
+已有的库用 `sql/migrate-2026-09-05-two-sides.sql` 清理这两张表。
 
-                    ]
-                },
-                {
-                    "id":10,
-                    "name":"基础组件",
-                    "code":"BaseComponents",
-                    "type":"MENU",
-                    "parentId":9,
-                    "path":"/base/components",
-                    "redirect":"",
-                    "icon":"i-me:awesome",
-                    "component":"/src/views/base/index.vue",
-                    "layout":"",
-                    "keepAlive":0,
-                    "method":"",
-                    "description":"",
-                    "show":1,
-                    "enable":1,
-                    "order":1,
-                    "children":[
-
-                    ]
-                },
-                {
-                    "id":11,
-                    "name":"Unocss",
-                    "code":"Unocss",
-                    "type":"MENU",
-                    "parentId":9,
-                    "path":"/base/unocss",
-                    "redirect":"",
-                    "icon":"i-me:awesome",
-                    "component":"/src/views/base/unocss.vue",
-                    "layout":"",
-                    "keepAlive":0,
-                    "method":"",
-                    "description":"",
-                    "show":1,
-                    "enable":1,
-                    "order":2,
-                    "children":[
-
-                    ]
-                },
-                {
-                    "id":12,
-                    "name":"KeepAlive",
-                    "code":"KeepAlive",
-                    "type":"MENU",
-                    "parentId":9,
-                    "path":"/base/keep-alive",
-                    "redirect":"",
-                    "icon":"i-me:awesome",
-                    "component":"/src/views/base/keep-alive.vue",
-                    "layout":"",
-                    "keepAlive":1,
-                    "method":"",
-                    "description":"",
-                    "show":1,
-                    "enable":1,
-                    "order":3,
-                    "children":[
-
-                    ]
-                },
-                {
-                    "id":15,
-                    "name":"MeModal",
-                    "code":"TestModal",
-                    "type":"MENU",
-                    "parentId":9,
-                    "path":"/testModal",
-                    "redirect":"",
-                    "icon":"i-me:dialog",
-                    "component":"/src/views/base/test-modal.vue",
-                    "layout":"",
-                    "keepAlive":0,
-                    "method":"",
-                    "description":"",
-                    "show":1,
-                    "enable":1,
-                    "order":5,
-                    "children":[
-
-                    ]
-                }
-            ]
-        },
-        {
-            "id":6,
-            "name":"业务示例",
-            "code":"Demo",
-            "type":"MENU",
-            "parentId":null,
-            "path":"",
-            "redirect":"",
-            "icon":"i-fe:grid",
-            "component":"",
-            "layout":"",
-            "keepAlive":0,
-            "method":"",
-            "description":"",
-            "show":1,
-            "enable":1,
-            "order":1,
-            "children":[
-                {
-                    "id":7,
-                    "name":"图片上传",
-                    "code":"ImgUpload",
-                    "type":"MENU",
-                    "parentId":6,
-                    "path":"/demo/upload",
-                    "redirect":"",
-                    "icon":"i-fe:image",
-                    "component":"/src/views/demo/upload/index.vue",
-                    "layout":"",
-                    "keepAlive":1,
-                    "method":"",
-                    "description":"",
-                    "show":1,
-                    "enable":1,
-                    "order":2,
-                    "children":[
-
-                    ]
-                }
-            ]
-        },
-        {
-            "id":2,
-            "name":"系统管理",
-            "code":"SysMgt",
-            "type":"MENU",
-            "parentId":null,
-            "path":"",
-            "redirect":"",
-            "icon":"i-fe:grid",
-            "component":"",
-            "layout":"",
-            "keepAlive":0,
-            "method":"",
-            "description":"",
-            "show":1,
-            "enable":1,
-            "order":2,
-            "children":[
-                {
-                    "id":1,
-                    "name":"资源管理",
-                    "code":"Resource_Mgt",
-                    "type":"MENU",
-                    "parentId":2,
-                    "path":"/pms/resource",
-                    "redirect":"",
-                    "icon":"i-fe:list",
-                    "component":"/src/views/pms/resource/index.vue",
-                    "layout":"",
-                    "keepAlive":0,
-                    "method":"",
-                    "description":"",
-                    "show":1,
-                    "enable":1,
-                    "order":1,
-                    "children":[
-
-                    ]
-                },
-                {
-                    "id":3,
-                    "name":"角色管理",
-                    "code":"RoleMgt",
-                    "type":"MENU",
-                    "parentId":2,
-                    "path":"/pms/role",
-                    "redirect":"",
-                    "icon":"i-fe:user-check",
-                    "component":"/src/views/pms/role/index.vue",
-                    "layout":"",
-                    "keepAlive":0,
-                    "method":"",
-                    "description":"",
-                    "show":1,
-                    "enable":1,
-                    "order":2,
-                    "children":[
-                        {
-                            "id":5,
-                            "name":"分配用户",
-                            "code":"RoleUser",
-                            "type":"MENU",
-                            "parentId":3,
-                            "path":"/pms/role/user/:roleId",
-                            "redirect":"",
-                            "icon":"i-fe:user-plus",
-                            "component":"/src/views/pms/role/role-user.vue",
-                            "layout":"",
-                            "keepAlive":0,
-                            "method":"",
-                            "description":"",
-                            "show":0,
-                            "enable":1,
-                            "order":1,
-                            "children":null
-                        }
-                    ]
-                },
-                {
-                    "id":4,
-                    "name":"用户管理",
-                    "code":"UserMgt",
-                    "type":"MENU",
-                    "parentId":2,
-                    "path":"/pms/user",
-                    "redirect":"",
-                    "icon":"i-fe:user",
-                    "component":"/src/views/pms/user/index.vue",
-                    "layout":"",
-                    "keepAlive":1,
-                    "method":"",
-                    "description":"",
-                    "show":1,
-                    "enable":1,
-                    "order":3,
-                    "children":[
-                        {
-                            "id":13,
-                            "name":"创建新用户",
-                            "code":"AddUser",
-                            "type":"BUTTON",
-                            "parentId":4,
-                            "path":"",
-                            "redirect":"",
-                            "icon":"",
-                            "component":"",
-                            "layout":"",
-                            "keepAlive":0,
-                            "method":"",
-                            "description":"",
-                            "show":1,
-                            "enable":1,
-                            "order":1,
-                            "children":null
-                        }
-                    ]
-                }
-            ]
-        },
-        {
-            "id":24,
-            "name":"wwwwwww",
-            "code":"wwwwwwww",
-            "type":"MENU",
-            "parentId":null,
-            "path":"",
-            "redirect":"",
-            "icon":"",
-            "component":"",
-            "layout":"",
-            "keepAlive":0,
-            "method":"",
-            "description":"",
-            "show":0,
-            "enable":0,
-            "order":2,
-            "children":[
-
-            ]
-        },
-        {
-            "id":8,
-            "name":"个人资料",
-            "code":"UserProfile",
-            "type":"MENU",
-            "parentId":null,
-            "path":"/profile",
-            "redirect":"",
-            "icon":"i-fe:user",
-            "component":"/src/views/profile/index.vue",
-            "layout":"",
-            "keepAlive":0,
-            "method":"",
-            "description":"",
-            "show":0,
-            "enable":1,
-            "order":99,
-            "children":[
-
-            ]
-        }
-    ],
-    "originUrl":"/role/permissions/tree"
-}
-```
-### 用户-列表 get : /api/user
+### 用户-列表 get : /api/user  **仅管理员**
 
 **request**
 
@@ -509,12 +180,6 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
                         "code":"SUPER_ADMIN",
                         "name":"超级管理员",
                         "enable":true
-                    },
-                    {
-                        "id":2,
-                        "code":"ROLE_QA",
-                        "name":"质检员",
-                        "enable":true
                     }
                 ]
             },
@@ -528,14 +193,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
                 "avatar":"",
                 "address":"",
                 "email":"",
-                "roles":[
-                    {
-                        "id":2,
-                        "code":"ROLE_QA",
-                        "name":"质检员",
-                        "enable":true
-                    }
-                ]
+                "roles":[]
             },
             {
                 "id":14,
@@ -552,12 +210,6 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
                         "id":1,
                         "code":"SUPER_ADMIN",
                         "name":"超级管理员",
-                        "enable":true
-                    },
-                    {
-                        "id":2,
-                        "code":"ROLE_QA",
-                        "name":"质检员",
                         "enable":true
                     },
                     {
@@ -580,12 +232,6 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
                 "email":"",
                 "roles":[
                     {
-                        "id":2,
-                        "code":"ROLE_QA",
-                        "name":"质检员",
-                        "enable":true
-                    },
-                    {
                         "id":3,
                         "code":"lkjlkj",
                         "name":"iiii",
@@ -601,7 +247,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
 ```
 
 
-### 用户管理-状态停用/启用 patch : /api/user/:id
+### 用户管理-状态停用/启用 patch : /api/user/:id  **仅管理员**
 
 **request**
 
@@ -622,7 +268,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
 ```
 
 
-### 用户管理-新增 post : /api/user
+### 用户管理-新增 post : /api/user  **仅管理员**
 
 **request**
 
@@ -647,7 +293,11 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
 }
 ```
 
-### 用户管理-分配角色 patch : /api/user/:id
+### 用户管理-分配所属端 patch : /api/user/:id  **仅管理员**
+
+`roleIds` 决定账号登录后进哪个端。控制台只发一个 id：`SUPER_ADMIN` 进管理端，
+`USER` 进用户端。接口本身仍接受多个 id，但多个角色只会让"进哪个端"取决于哪个
+角色排在前面，没有别的效果。
 
 **request**
 
@@ -656,10 +306,8 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
     "id":14, //必传-用户id
     "username":"eeeee",
     "roleIds":[
-        1,
-        2,
-        5
-    ] //角色id数组
+        4
+    ] //角色id数组，控制台只发一个
 }
 ```
 
@@ -673,7 +321,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
 ```
 
 
-### 用户管理-重置密码 patch : /api/user/password/reset/:id
+### 用户管理-重置密码 patch : /api/user/password/reset/:id  **仅管理员**
 
 **request**
 
@@ -694,7 +342,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
 ```
 
 
-###   用户管理-删除用户  delete : /api/user/:id
+###   用户管理-删除用户  delete : /api/user/:id  **仅管理员**
 
 **request**
 
@@ -711,6 +359,9 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
 ```
 
 ###  个人资料修改 patch : /api/user/profile/:id
+
+两个端都用得到，所以不限管理员；但传的是 profile 行的 id，服务端会核对这一行属
+于调用者本人（管理员除外）。
 
 **request**
 
@@ -755,16 +406,10 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
 }
 ```
 
-###  角色管理-角色列表  get : /api/role
+###  角色列表  get : /api/role  **仅管理员**
 
-**request**
-
-```
-{
-
-    "enable":1,
-}
-```
+只剩这一个角色接口。账号表单用它把 `SUPER_ADMIN` / `USER` 解析成本库里的角色 id，
+再通过 `PATCH /api/user/:id` 的 `roleIds` 决定这个账号进哪个端。
 
 **response**
 ```
@@ -779,933 +424,12 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
             "enable":true
         },
         {
-            "id":2,
-            "code":"ROLE_QA",
-            "name":"质检员",
-            "enable":true
-        },
-        {
-            "id":3,
-            "code":"lkjlkj",
-            "name":"iiii",
-            "enable":false
-        },
-        {
-            "id":6,
-            "code":"wwww",
-            "name":"www",
+            "id":4,
+            "code":"USER",
+            "name":"普通用户",
             "enable":true
         }
     ],
     "originUrl":"/role"
 }
 ```
-
-###  角色管理-角色列表（搜索） get : /api/role/page
-
-**request**
-
-```
-{
-    "name":"",// 可传
-    "enable":"eeeeee",//  可传
-	"pageNo":1,//  可传：默认1
-	"pageSize":10,//  可传：默认10
-}
-```
-
-**response**
-```
-{
-    "code":0,
-    "message":"OK",
-    "data":{
-        "pageData":[
-            {
-                "id":1,
-                "code":"SUPER_ADMIN",
-                "name":"超级管理员",
-                "enable":true,
-                "permissionIds":[
-
-                ]
-            },
-            {
-                "id":2,
-                "code":"ROLE_QA",
-                "name":"质检员",
-                "enable":true,
-                "permissionIds":[
-                    1,
-                    2,
-                    3,
-                    4,
-                    5,
-                    8,
-                    13,
-                    24
-                ]
-            },
-            {
-                "id":3,
-                "code":"lkjlkj",
-                "name":"iiii",
-                "enable":true,
-                "permissionIds":[
-                    9,
-                    10,
-                    11,
-                    12,
-                    14,
-                    15
-                ]
-            },
-            {
-                "id":5,
-                "code":"erser",
-                "name":"jkjn",
-                "enable":false,
-                "permissionIds":[
-                    2,
-                    3,
-                    4,
-                    6,
-                    9
-                ]
-            }
-        ],
-        "total":0
-    },
-    "originUrl":"/role/page"
-}
-```
-
-###  角色管理-角色启用/停用  patch : /api/role/:id
-
-**request**
-
-```
-{
-    "id":3,// 必传
-    "enable":false// 必传
-}
-```
-
-**response**
-```
-{
-    "code":0,
-    "message":"OK",
-    "originUrl":"/role/3"
-}
-```
-###  角色管理-角色新增 post : /api/role
-
-**request**
-
-```
-{
-    "code":"erser",// 必传
-    "name":"jkjn",/ 必传
-    "enable":false,// 可传,默认 true
-    "permissionIds":[
-        2,
-        13,
-        4
-    ],//可传-资源列表
-}
-```
-
-**response**
-```
-{
-    "code":0,
-    "message":"OK",
-    "data":"",
-    "originUrl":"/role"
-}
-```
-###  角色管理-角色编辑 patch : /api/role/:id
-
-**request**
-
-```
-{
-    "id":5,// 必传
-    "code":"erser",// 可传
-    "name":"jkjn",// 可传
-    "enable":false,// 可传
-    "permissionIds":[
-        2,
-        13,
-        4
-    ],//可传-资源列表
-}
-```
-
-**response**
-```
-{
-    "code":0,
-    "message":"OK",
-    "originUrl":"/role/3"
-}
-```
-
-###  角色管理-删除 delete : /api/role/:id
-
-**request**
-
--
-
-**response**
-```
-{
-    "code":0,
-    "message":"OK",
-    "data":"",
-    "originUrl":"/role/5"
-}
-```
-
-###  角色管理-分配用户-授权 patch : /api/role/users/add/:id
-
-**request**
-```
-{
-    "userIds":[
-        14
-    ]
-}
-```
-
-**response**
-```
-{
-    "code":0,
-    "message":"OK",
-    "data":"",
-    "originUrl":"/role/users/add/3"
-}
-```
-
-###  角色管理-分配用户-取消授权 patch : /api/role/users/remove/:id
-
-**request**
-```
-{
-    "userIds":[
-        14
-    ]
-}
-```
-
-**response**
-```
-{
-    "code":0,
-    "message":"OK",
-    "data":"",
-    "originUrl":"/role/users/remove/3"
-}
-```
-###  资源管理-所有菜单 get : /api/permission/tree
-
-**request**
-
-```
-{
-    "code":0,
-    "message":"OK",
-    "data":[
-        {
-            "id":9,
-            "name":"基础功能",
-            "code":"Base",
-            "type":"MENU",
-            "parentId":null,
-            "path":"/base",
-            "redirect":"",
-            "icon":"i-fe:grid",
-            "component":"",
-            "layout":"",
-            "keepAlive":0,
-            "method":"",
-            "description":"",
-            "show":1,
-            "enable":1,
-            "order":0,
-            "children":[
-                {
-                    "id":15,
-                    "name":"MeModal",
-                    "code":"TestModal",
-                    "type":"MENU",
-                    "parentId":9,
-                    "path":"/testModal",
-                    "redirect":"",
-                    "icon":"i-me:dialog",
-                    "component":"/src/views/base/test-modal.vue",
-                    "layout":"",
-                    "keepAlive":0,
-                    "method":"",
-                    "description":"",
-                    "show":1,
-                    "enable":1,
-                    "order":5,
-                    "children":[
-
-                    ]
-                }
-            ]
-        },
-        {
-            "id":6,
-            "name":"业务示例",
-            "code":"Demo",
-            "type":"MENU",
-            "parentId":null,
-            "path":"",
-            "redirect":"",
-            "icon":"i-fe:grid",
-            "component":"",
-            "layout":"",
-            "keepAlive":0,
-            "method":"",
-            "description":"",
-            "show":1,
-            "enable":1,
-            "order":1,
-            "children":[
-                {
-                    "id":7,
-                    "name":"图片上传",
-                    "code":"ImgUpload",
-                    "type":"MENU",
-                    "parentId":6,
-                    "path":"/demo/upload",
-                    "redirect":"",
-                    "icon":"i-fe:image",
-                    "component":"/src/views/demo/upload/index.vue",
-                    "layout":"",
-                    "keepAlive":1,
-                    "method":"",
-                    "description":"",
-                    "show":1,
-                    "enable":1,
-                    "order":2,
-                    "children":[
-
-                    ]
-                }
-            ]
-        },
-        {
-            "id":2,
-            "name":"系统管理",
-            "code":"SysMgt",
-            "type":"MENU",
-            "parentId":null,
-            "path":"",
-            "redirect":"",
-            "icon":"i-fe:grid",
-            "component":"",
-            "layout":"",
-            "keepAlive":0,
-            "method":"",
-            "description":"",
-            "show":1,
-            "enable":1,
-            "order":2,
-            "children":[
-                {
-                    "id":1,
-                    "name":"资源管理",
-                    "code":"Resource_Mgt",
-                    "type":"MENU",
-                    "parentId":2,
-                    "path":"/pms/resource",
-                    "redirect":"",
-                    "icon":"i-fe:list",
-                    "component":"/src/views/pms/resource/index.vue",
-                    "layout":"",
-                    "keepAlive":0,
-                    "method":"",
-                    "description":"",
-                    "show":1,
-                    "enable":1,
-                    "order":1,
-                    "children":[
-
-                    ]
-                },
-                {
-                    "id":3,
-                    "name":"角色管理",
-                    "code":"RoleMgt",
-                    "type":"MENU",
-                    "parentId":2,
-                    "path":"/pms/role",
-                    "redirect":"",
-                    "icon":"i-fe:user-check",
-                    "component":"/src/views/pms/role/index.vue",
-                    "layout":"",
-                    "keepAlive":0,
-                    "method":"",
-                    "description":"",
-                    "show":1,
-                    "enable":1,
-                    "order":2,
-                    "children":[
-                        {
-                            "id":5,
-                            "name":"分配用户",
-                            "code":"RoleUser",
-                            "type":"MENU",
-                            "parentId":3,
-                            "path":"/pms/role/user/:roleId",
-                            "redirect":"",
-                            "icon":"i-fe:user-plus",
-                            "component":"/src/views/pms/role/role-user.vue",
-                            "layout":"",
-                            "keepAlive":0,
-                            "method":"",
-                            "description":"",
-                            "show":0,
-                            "enable":1,
-                            "order":1,
-                            "children":null
-                        }
-                    ]
-                },
-                {
-                    "id":4,
-                    "name":"用户管理",
-                    "code":"UserMgt",
-                    "type":"MENU",
-                    "parentId":2,
-                    "path":"/pms/user",
-                    "redirect":"",
-                    "icon":"i-fe:user",
-                    "component":"/src/views/pms/user/index.vue",
-                    "layout":"",
-                    "keepAlive":1,
-                    "method":"",
-                    "description":"",
-                    "show":1,
-                    "enable":1,
-                    "order":3,
-                    "children":[
-                        {
-                            "id":13,
-                            "name":"创建新用户",
-                            "code":"AddUser",
-                            "type":"BUTTON",
-                            "parentId":4,
-                            "path":"",
-                            "redirect":"",
-                            "icon":"",
-                            "component":"",
-                            "layout":"",
-                            "keepAlive":0,
-                            "method":"",
-                            "description":"",
-                            "show":1,
-                            "enable":1,
-                            "order":1,
-                            "children":null
-                        }
-                    ]
-                },
-                {
-                    "id":27,
-                    "name":"wwwwwwww",
-                    "code":"wwwwwwwww",
-                    "type":"MENU",
-                    "parentId":2,
-                    "path":"/wwwww",
-                    "redirect":"",
-                    "icon":"i-fe:zoom-out",
-                    "component":"/src/views/pms/role/components/CascadeTree.vue",
-                    "layout":"",
-                    "keepAlive":1,
-                    "method":"/src/views/pms/role/components/CascadeTree.vue",
-                    "description":"",
-                    "show":1,
-                    "enable":1,
-                    "order":5,
-                    "children":[
-
-                    ]
-                }
-            ]
-        },
-        {
-            "id":8,
-            "name":"个人资料",
-            "code":"UserProfile",
-            "type":"MENU",
-            "parentId":null,
-            "path":"/profile",
-            "redirect":"",
-            "icon":"i-fe:user",
-            "component":"/src/views/profile/index.vue",
-            "layout":"",
-            "keepAlive":0,
-            "method":"",
-            "description":"",
-            "show":0,
-            "enable":1,
-            "order":99,
-            "children":[
-
-            ]
-        }
-    ],
-    "originUrl":"/permission/tree"
-}
-```
-
-**response**
-```
-{
-    "code":0,
-    "message":"OK",
-    "data":"",
-    "originUrl":"/permission"
-}
-```
-
-###  资源管理-菜单树 get : api/permission/menu/tree
-
-**request**
-
--
-
-**response**
-```
-{
-    "code":0,
-    "message":"OK",
-    "data":[
-        {
-            "id":9,
-            "name":"基础功能",
-            "code":"Base",
-            "type":"MENU",
-            "parentId":null,
-            "path":"/base",
-            "redirect":"",
-            "icon":"i-fe:grid",
-            "component":"",
-            "layout":"",
-            "keepAlive":0,
-            "method":"",
-            "description":"",
-            "show":1,
-            "enable":1,
-            "order":0,
-            "children":[
-                {
-                    "id":14,
-                    "name":"图标 Icon",
-                    "code":"Icon",
-                    "type":"MENU",
-                    "parentId":9,
-                    "path":"/base/icon",
-                    "redirect":"",
-                    "icon":"i-fe:feather",
-                    "component":"/src/views/base/unocss-icon.vue",
-                    "layout":"",
-                    "keepAlive":0,
-                    "method":"",
-                    "description":"",
-                    "show":1,
-                    "enable":1,
-                    "order":0,
-                    "children":[
-
-                    ]
-                },
-                {
-                    "id":10,
-                    "name":"基础组件",
-                    "code":"BaseComponents",
-                    "type":"MENU",
-                    "parentId":9,
-                    "path":"/base/components",
-                    "redirect":"",
-                    "icon":"i-me:awesome",
-                    "component":"/src/views/base/index.vue",
-                    "layout":"",
-                    "keepAlive":0,
-                    "method":"",
-                    "description":"",
-                    "show":1,
-                    "enable":1,
-                    "order":1,
-                    "children":[
-
-                    ]
-                },
-                {
-                    "id":11,
-                    "name":"Unocss",
-                    "code":"Unocss",
-                    "type":"MENU",
-                    "parentId":9,
-                    "path":"/base/unocss",
-                    "redirect":"",
-                    "icon":"i-me:awesome",
-                    "component":"/src/views/base/unocss.vue",
-                    "layout":"",
-                    "keepAlive":0,
-                    "method":"",
-                    "description":"",
-                    "show":1,
-                    "enable":1,
-                    "order":2,
-                    "children":[
-
-                    ]
-                },
-                {
-                    "id":12,
-                    "name":"KeepAlive",
-                    "code":"KeepAlive",
-                    "type":"MENU",
-                    "parentId":9,
-                    "path":"/base/keep-alive",
-                    "redirect":"",
-                    "icon":"i-me:awesome",
-                    "component":"/src/views/base/keep-alive.vue",
-                    "layout":"",
-                    "keepAlive":1,
-                    "method":"",
-                    "description":"",
-                    "show":1,
-                    "enable":1,
-                    "order":3,
-                    "children":[
-
-                    ]
-                },
-                {
-                    "id":15,
-                    "name":"MeModal",
-                    "code":"TestModal",
-                    "type":"MENU",
-                    "parentId":9,
-                    "path":"/testModal",
-                    "redirect":"",
-                    "icon":"i-me:dialog",
-                    "component":"/src/views/base/test-modal.vue",
-                    "layout":"",
-                    "keepAlive":0,
-                    "method":"",
-                    "description":"",
-                    "show":1,
-                    "enable":1,
-                    "order":5,
-                    "children":[
-
-                    ]
-                }
-            ]
-        },
-        {
-            "id":6,
-            "name":"业务示例",
-            "code":"Demo",
-            "type":"MENU",
-            "parentId":null,
-            "path":"",
-            "redirect":"",
-            "icon":"i-fe:grid",
-            "component":"",
-            "layout":"",
-            "keepAlive":0,
-            "method":"",
-            "description":"",
-            "show":1,
-            "enable":1,
-            "order":1,
-            "children":[
-                {
-                    "id":7,
-                    "name":"图片上传",
-                    "code":"ImgUpload",
-                    "type":"MENU",
-                    "parentId":6,
-                    "path":"/demo/upload",
-                    "redirect":"",
-                    "icon":"i-fe:image",
-                    "component":"/src/views/demo/upload/index.vue",
-                    "layout":"",
-                    "keepAlive":1,
-                    "method":"",
-                    "description":"",
-                    "show":1,
-                    "enable":1,
-                    "order":2,
-                    "children":[
-
-                    ]
-                }
-            ]
-        },
-        {
-            "id":2,
-            "name":"系统管理",
-            "code":"SysMgt",
-            "type":"MENU",
-            "parentId":null,
-            "path":"",
-            "redirect":"",
-            "icon":"i-fe:grid",
-            "component":"",
-            "layout":"",
-            "keepAlive":0,
-            "method":"",
-            "description":"",
-            "show":1,
-            "enable":1,
-            "order":2,
-            "children":[
-                {
-                    "id":1,
-                    "name":"资源管理",
-                    "code":"Resource_Mgt",
-                    "type":"MENU",
-                    "parentId":2,
-                    "path":"/pms/resource",
-                    "redirect":"",
-                    "icon":"i-fe:list",
-                    "component":"/src/views/pms/resource/index.vue",
-                    "layout":"",
-                    "keepAlive":0,
-                    "method":"",
-                    "description":"",
-                    "show":1,
-                    "enable":1,
-                    "order":1,
-                    "children":[
-
-                    ]
-                },
-                {
-                    "id":3,
-                    "name":"角色管理",
-                    "code":"RoleMgt",
-                    "type":"MENU",
-                    "parentId":2,
-                    "path":"/pms/role",
-                    "redirect":"",
-                    "icon":"i-fe:user-check",
-                    "component":"/src/views/pms/role/index.vue",
-                    "layout":"",
-                    "keepAlive":0,
-                    "method":"",
-                    "description":"",
-                    "show":1,
-                    "enable":1,
-                    "order":2,
-                    "children":[
-                        {
-                            "id":5,
-                            "name":"分配用户",
-                            "code":"RoleUser",
-                            "type":"MENU",
-                            "parentId":3,
-                            "path":"/pms/role/user/:roleId",
-                            "redirect":"",
-                            "icon":"i-fe:user-plus",
-                            "component":"/src/views/pms/role/role-user.vue",
-                            "layout":"",
-                            "keepAlive":0,
-                            "method":"",
-                            "description":"",
-                            "show":0,
-                            "enable":1,
-                            "order":1,
-                            "children":null
-                        }
-                    ]
-                },
-                {
-                    "id":4,
-                    "name":"用户管理",
-                    "code":"UserMgt",
-                    "type":"MENU",
-                    "parentId":2,
-                    "path":"/pms/user",
-                    "redirect":"",
-                    "icon":"i-fe:user",
-                    "component":"/src/views/pms/user/index.vue",
-                    "layout":"",
-                    "keepAlive":1,
-                    "method":"",
-                    "description":"",
-                    "show":1,
-                    "enable":1,
-                    "order":3,
-                    "children":[
-                        {
-                            "id":13,
-                            "name":"创建新用户",
-                            "code":"AddUser",
-                            "type":"BUTTON",
-                            "parentId":4,
-                            "path":"",
-                            "redirect":"",
-                            "icon":"",
-                            "component":"",
-                            "layout":"",
-                            "keepAlive":0,
-                            "method":"",
-                            "description":"",
-                            "show":1,
-                            "enable":1,
-                            "order":1,
-                            "children":null
-                        }
-                    ]
-                }
-            ]
-        },
-        {
-            "id":24,
-            "name":"wwwwwww",
-            "code":"wwwwwwww",
-            "type":"MENU",
-            "parentId":null,
-            "path":"",
-            "redirect":"",
-            "icon":"",
-            "component":"",
-            "layout":"",
-            "keepAlive":0,
-            "method":"",
-            "description":"",
-            "show":0,
-            "enable":0,
-            "order":2,
-            "children":[
-
-            ]
-        },
-        {
-            "id":8,
-            "name":"个人资料",
-            "code":"UserProfile",
-            "type":"MENU",
-            "parentId":null,
-            "path":"/profile",
-            "redirect":"",
-            "icon":"i-fe:user",
-            "component":"/src/views/profile/index.vue",
-            "layout":"",
-            "keepAlive":0,
-            "method":"",
-            "description":"",
-            "show":0,
-            "enable":1,
-            "order":99,
-            "children":[
-
-            ]
-        }
-    ],
-    "originUrl":"/permission/menu/tree"
-}
-
-```
-
-###  资源管理-删除菜单 delete : /api/permission/:id
-
-**request**
--
-
-**response**
-```
-{
-    "code":0,
-    "message":"OK",
-    "data":"",
-    "originUrl":"/permission/24"
-}
-```
-
-
-###  资源管理-新增菜单 post : /api/permission
-
-**request**
-
-```
-{
-    "type":"MENU",
-    "parentId":2,
-    "name":"wwwwwwww",//必传
-    "code":"wwwwwwwww",//必传
-    "path":"/wwwww",
-    "icon":"i-fe:zoom-out",
-    "layout":"",
-    "component":"/src/views/pms/role/components/CascadeTree.vue",
-    "show":true,
-    "keepAlive":true,
-    "enable":true,
-    "order":5//必传
-}
-```
-
-**response**
-```
-{
-    "code":0,
-    "message":"OK",
-    "data":"",
-    "originUrl":"/permission"
-}
-```
-
-###  资源管理-编辑菜单 patch : /api/permission/:id
-
-**request**
-
-```
-{
-    "id":27,//必传
-    "name":"wwwwwwww",//必传
-    "code":"wwwwwwwww",//必传
-    "type":"MENU",//必传
-    "parentId":2,
-    "path":"/wwwww",
-    "redirect":"",
-    "icon":"i-fe:zoom-out",
-    "component":"/src/views/pms/role/components/CascadeTree.vue",
-    "layout":"",
-    "keepAlive":1,
-    "method":"",
-    "description":"",
-    "show":1,
-    "enable":1,
-    "order":5,//必传
-    "children":[
-
-    ]
-}
-```
-
-**response**
-```
-{
-    "code":0,
-    "message":"OK",
-    "data":"",
-    "originUrl":"/permission"
-}
-```
-
-
-
-

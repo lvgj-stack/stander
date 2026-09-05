@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/cloudwego/hertz/pkg/app"
@@ -123,12 +124,23 @@ func (auth) Logout(c context.Context, ctx *app.RequestContext) {
 	Resp.Succ(ctx, true)
 }
 
+// SwitchRole mints a token carrying a different one of the caller's roles.
+//
+// The requested role must be one the account actually holds. It used to be
+// taken from the path and signed as-is, so anyone with a token could ask for
+// SUPER_ADMIN and get one: the middleware copies CurrentRoleCode straight into
+// identity.Principal, and IsSuperAdmin() is the single authorization boundary
+// the whole service layer — and the console's two sides — rest on.
 func (auth) SwitchRole(c context.Context, ctx *app.RequestContext) {
 	roleName := ctx.Param("role")
 	jwtToken, _ := ctx.Get("jwt_token")
 	claim, ok := jwtToken.(*utils.CustomClaims)
 	if !ok {
 		Resp.Err(ctx, 401, "无效的登录态")
+		return
+	}
+	if !slices.Contains(claim.RoleCodes, roleName) {
+		Resp.Err(ctx, 20001, "没有这个角色")
 		return
 	}
 	claim.CurrentRoleCode = roleName

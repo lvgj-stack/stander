@@ -17,7 +17,7 @@
 
 | 配置路径 | 环境变量 | 默认值 | 说明 |
 |---|---|---|---|
-| `Server.Port` | `STANDER_SERVER_PORT` | `8123` | HTTP 监听端口。管理后台和控制面共用 |
+| `Server.Port` | `STANDER_SERVER_PORT` | `8123` | HTTP 监听端口。控制台和控制面共用 |
 | `Server.LogLevel` | `STANDER_SERVER_LOGLEVEL` | `2` | 0=trace 1=debug 2=info 3=notice 4=warn 5=error |
 | `Server.LogFormat` | `STANDER_SERVER_LOGFORMAT` | `text` | `text` 或 `json`。集群里用 `json`，日志采集器才能解析成字段 |
 | `Server.Timezone` | `STANDER_SERVER_TIMEZONE` | `Asia/Shanghai` | 进程时区。**会影响每日流量的日期归属**，见下 |

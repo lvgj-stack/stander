@@ -6,8 +6,7 @@ import { clearToken } from './client'
 import { editForwardUser, listForwardUsers } from './forward-user'
 import { associatePlan, listPlans } from './plan'
 import { addNode, deleteNode, listNodes } from './node'
-import { updatePermission } from './permission'
-import { listRolesPage } from './role'
+import { listRoles } from './role'
 import { addRule, deleteRule, testRule } from './rule'
 import { listUsers } from './user'
 
@@ -16,8 +15,8 @@ import { listUsers } from './user'
  *
  * The two request dialects are the thing worth guarding: `/stander/*` takes
  * PascalCase fields in a POST body with the verb in an `Action` query
- * parameter, while the RBAC endpoints are ordinary REST with camelCase query
- * parameters. Getting one of them wrong fails at runtime with an opaque
+ * parameter, while the account endpoints are ordinary REST with camelCase
+ * query parameters. Getting one of them wrong fails at runtime with an opaque
  * "unknown action" or a silently ignored filter.
  */
 let fetchSpy: ReturnType<typeof vi.fn>
@@ -149,8 +148,8 @@ describe('forwarding user and plan actions', () => {
   })
 })
 
-describe('RBAC endpoints keep the REST dialect', () => {
-  it('lists users with camelCase query parameters', async () => {
+describe('account endpoints keep the REST dialect', () => {
+  it('lists accounts with camelCase query parameters', async () => {
     await listUsers({ pageNo: 2, pageSize: 20, username: 'ad' })
     expect(sent()).toMatchObject({
       url: '/user?pageNo=2&pageSize=20&username=ad',
@@ -158,29 +157,11 @@ describe('RBAC endpoints keep the REST dialect', () => {
     })
   })
 
-  it('pages roles through /role/page', async () => {
-    await listRolesPage({ pageNo: 1, pageSize: 10 })
-    expect(sent().url).toBe('/role/page?pageNo=1&pageSize=10')
-  })
-
-  it('converts the boolean columns to 0/1 for the PATCH endpoint', async () => {
-    // inout.PatchPermissionReq types show/enable/keepAlive as int, while
-    // inout.AddPermissionReq types them as bool. Sending `true` here binds as
-    // zero and silently hides the menu entry.
-    await updatePermission({
-      id: 4,
-      type: 'MENU',
-      parentId: null,
-      name: '节点',
-      code: 'Server',
-      show: true,
-      enable: true,
-      keepAlive: false,
-      order: 1,
-    })
-    const { url, method, body } = sent()
-    expect(url).toBe('/permission/4')
-    expect(method).toBe('PATCH')
-    expect(body).toMatchObject({ show: 1, enable: 1, keepAlive: 0 })
+  // All that is left of the role API. The account form resolves SUPER_ADMIN
+  // and USER to ids through it, so a paged or filtered variant would only be a
+  // second way to ask the same question.
+  it('reads the whole role list from /role', async () => {
+    await listRoles()
+    expect(sent()).toMatchObject({ url: '/role', method: 'GET' })
   })
 })

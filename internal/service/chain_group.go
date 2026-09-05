@@ -12,7 +12,14 @@ import (
 	"github.com/lvgj-stack/stander/internal/service/resp"
 )
 
+// Chain groups are an administrative resource: ListChainGroup has always
+// returned an empty list to anyone but the super admin, so the writes belong
+// to the same side. Without the gate, a user-portal account could create and
+// delete groups it cannot see.
 func AddChainGroup(ctx context.Context, r *req.AddChainGroupReq) (*resp.AddChainGroupResp, error) {
+	if err := requireSuperAdmin(ctx); err != nil {
+		return nil, err
+	}
 
 	chainIds := make([]int64, 0)
 	chainMap := make(map[int64]req.ChainEntityForChainGroup)
@@ -48,6 +55,9 @@ func AddChainGroup(ctx context.Context, r *req.AddChainGroupReq) (*resp.AddChain
 }
 
 func DelChainGroup(ctx context.Context, r *req.DelChainGroupReq) (*resp.EmptyResp, error) {
+	if err := requireSuperAdmin(ctx); err != nil {
+		return nil, err
+	}
 
 	if _, err := dal.ChainGroup.WithContext(ctx).Where(dal.ChainGroup.ChainGroupID.Eq(r.ChainGroupID)).Delete(&entity.ChainGroup{}); err != nil {
 		return nil, err

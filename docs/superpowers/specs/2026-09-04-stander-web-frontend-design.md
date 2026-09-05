@@ -1,5 +1,11 @@
 # Stander 管理后台前端设计
 
+> **已被 2026-09-05 的"两个端"重构取代。** 下面描述的按 `permission` 树过滤菜单、
+> `lib/permissions.ts`、`src/routes/nav.tsx` 和 `sql/web_menu.sql` 都不存在了：
+> 控制台现在是管理端 `/admin/*` 与用户端 `/portal/*` 两套写死的路由，按角色分流。
+> 保留本文是作为当时的设计记录，不要照着它改代码或建表。
+> 现状见 [architecture.md](../../architecture.md) 的"前端"一节与 `web/README.md`。
+
 日期：2026-09-04
 
 ## 背景

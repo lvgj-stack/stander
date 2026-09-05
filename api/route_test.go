@@ -9,6 +9,7 @@ import (
 
 	"github.com/lvgj-stack/stander/internal/common"
 	"github.com/lvgj-stack/stander/internal/config"
+	"github.com/lvgj-stack/stander/internal/utils"
 )
 
 // Registering the routes is itself the assertion for router-tree conflicts:
@@ -41,19 +42,6 @@ func TestAdminRoutesAreRegistered(t *testing.T) {
 		{http.MethodPatch, "/user/profile/1"},
 		{http.MethodGet, "/user/detail"},
 		{http.MethodGet, "/role"},
-		{http.MethodPost, "/role"},
-		{http.MethodPatch, "/role/1"},
-		{http.MethodDelete, "/role/1"},
-		{http.MethodPatch, "/role/users/add/1"},
-		{http.MethodPatch, "/role/users/remove/1"},
-		{http.MethodGet, "/role/page"},
-		{http.MethodGet, "/role/permissions/tree"},
-		{http.MethodPost, "/permission"},
-		{http.MethodPatch, "/permission/1"},
-		{http.MethodDelete, "/permission/1"},
-		{http.MethodGet, "/permission/tree"},
-		{http.MethodGet, "/permission/menu/tree"},
-		{http.MethodGet, "/permission/button/1"},
 		{http.MethodPost, "/stander/node"},
 		{http.MethodPost, "/stander/chain"},
 		{http.MethodPost, "/stander/rule"},
@@ -93,6 +81,118 @@ func TestAuthRoutesArePublic(t *testing.T) {
 				t.Fatalf("%s must not require a token, got %s", r.path, body)
 			}
 		})
+	}
+}
+
+// The console builds its menu from a static route table on both sides, so the
+// permission tree that used to drive it — and the role editing that maintained
+// it — are gone. They must stay gone: leaving the endpoints mounted would keep
+// a second, unused authorization model alive next to the role check that
+// actually decides what a caller sees.
+func TestPermissionTreeRoutesAreGone(t *testing.T) {
+	h := newServerUnderTest(t)
+
+	for _, r := range []struct {
+		method string
+		path   string
+	}{
+		{http.MethodPost, "/role"},
+		{http.MethodPatch, "/role/1"},
+		{http.MethodDelete, "/role/1"},
+		{http.MethodPatch, "/role/users/add/1"},
+		{http.MethodPatch, "/role/users/remove/1"},
+		{http.MethodGet, "/role/page"},
+		{http.MethodGet, "/role/permissions/tree"},
+		{http.MethodPost, "/permission"},
+		{http.MethodPatch, "/permission/1"},
+		{http.MethodDelete, "/permission/1"},
+		{http.MethodGet, "/permission/tree"},
+		{http.MethodGet, "/permission/menu/tree"},
+		{http.MethodGet, "/permission/button/1"},
+	} {
+		t.Run(r.method+" "+r.path, func(t *testing.T) {
+			w := ut.PerformRequest(h.Engine, r.method, r.path, nil)
+			if got := w.Result().StatusCode(); got != http.StatusNotFound {
+				t.Fatalf("got status %d, want 404: this route was removed with the dynamic menu", got)
+			}
+		})
+	}
+}
+
+// The two sides of the console are served by one API, so a plain forwarding
+// user holds a perfectly valid token against every route here. "Not linked
+// from the user portal" is not a control — these have to be refused on the
+// server.
+func TestAccountRoutesRequireSuperAdmin(t *testing.T) {
+	utils.SetJWTSigningKey("test-signing-key")
+	h := newServerUnderTest(t)
+	token := "Bearer " + utils.GenerateToken(3, 3, "user01", "USER", []string{"USER"})
+
+	for _, r := range []struct {
+		method string
+		path   string
+	}{
+		{http.MethodGet, "/user"},
+		{http.MethodPost, "/user"},
+		{http.MethodDelete, "/user/1"},
+		{http.MethodPatch, "/user/1"},
+		{http.MethodPatch, "/user/password/reset/1"},
+		{http.MethodGet, "/role"},
+	} {
+		t.Run(r.method+" "+r.path, func(t *testing.T) {
+			w := ut.PerformRequest(h.Engine, r.method, r.path, nil,
+				ut.Header{Key: "Authorization", Value: token})
+			body := string(w.Result().Body())
+			if !contains(body, `"code":403`) {
+				t.Fatalf("a USER token must not reach this route, got %s", body)
+			}
+		})
+	}
+}
+
+// ...while the endpoints both sides need must stay reachable with that same
+// token. A 401/403 here would strand every user-portal account.
+func TestSelfServiceRoutesAcceptANonAdminToken(t *testing.T) {
+	utils.SetJWTSigningKey("test-signing-key")
+	h := newServerUnderTest(t)
+	token := "Bearer " + utils.GenerateToken(3, 3, "user01", "USER", []string{"USER"})
+
+	for _, r := range []struct {
+		method string
+		path   string
+	}{
+		{http.MethodPost, "/auth/logout"},
+		{http.MethodPost, "/auth/current-role/switch/USER"},
+	} {
+		t.Run(r.method+" "+r.path, func(t *testing.T) {
+			w := ut.PerformRequest(h.Engine, r.method, r.path, nil,
+				ut.Header{Key: "Authorization", Value: token})
+			body := string(w.Result().Body())
+			if contains(body, `"code":401`) || contains(body, `"code":403`) {
+				t.Fatalf("%s must stay open to a user-portal account, got %s", r.path, body)
+			}
+		})
+	}
+}
+
+// Switching role re-signs the token with whatever role was asked for, and the
+// middleware copies that straight into identity.Principal — so an unchecked
+// role name is a one-request path to SUPER_ADMIN, which is the single boundary
+// the service layer and the console's two sides both rest on.
+func TestSwitchRoleRejectsARoleTheAccountDoesNotHold(t *testing.T) {
+	utils.SetJWTSigningKey("test-signing-key")
+	h := newServerUnderTest(t)
+	token := "Bearer " + utils.GenerateToken(3, 3, "user01", "USER", []string{"USER"})
+
+	w := ut.PerformRequest(h.Engine, http.MethodPost, "/auth/current-role/switch/SUPER_ADMIN", nil,
+		ut.Header{Key: "Authorization", Value: token})
+
+	body := string(w.Result().Body())
+	if contains(body, `"accessToken"`) {
+		t.Fatalf("minted a SUPER_ADMIN token for an account that holds only USER: %s", body)
+	}
+	if !contains(body, "没有这个角色") {
+		t.Fatalf("expected the role check to reject this, got %s", body)
 	}
 }
 

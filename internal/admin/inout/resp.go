@@ -75,11 +75,3 @@ type UserListRes struct {
 	PageData []UserListItem `json:"pageData"`
 	Total    int64          `json:"total"`
 }
-type RoleListPageItem struct {
-	model.Role
-	PermissionIds []int64 `json:"permissionIds" gorm:"-"`
-}
-type RoleListPageRes struct {
-	PageData []RoleListPageItem `json:"pageData"`
-	Total    int64              `json:"total"`
-}

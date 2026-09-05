@@ -20,14 +20,24 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Switch } from '@/components/ui/switch'
 import { useActionMutation } from '@/hooks/use-action-mutation'
+import { ADMIN_ROLE, useAuth } from '@/hooks/use-auth'
 import { useTableParams } from '@/hooks/use-table-params'
 import { formatTime, orEmpty } from '@/lib/format'
 import type { AdminUser } from '@/types/api'
 
+import { AccountFormDialog } from './account-form-dialog'
 import { ResetPasswordDialog } from './reset-password-dialog'
-import { UserFormDialog } from './user-form-dialog'
 
-export function UsersPage() {
+/**
+ * Account management.
+ *
+ * The 角色 column reads as "which side of the console this account gets",
+ * because that is now the only thing a role decides. It used to be a set of
+ * badges whose real meaning was a set of permission rows, and those rows also
+ * decided which menu entries the account would see.
+ */
+export function AccountsPage() {
+  const { user } = useAuth()
   const params = useTableParams()
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<AdminUser | undefined>()
@@ -47,7 +57,7 @@ export function UsersPage() {
 
   const removeMutation = useActionMutation({
     mutationFn: (user: AdminUser) => deleteUser(user.id),
-    successMessage: '用户已删除',
+    successMessage: '账号已删除',
     invalidate: [['admin-users']],
     onSuccess: () => setDeleting(undefined),
   })
@@ -80,30 +90,32 @@ export function UsersPage() {
       ),
     },
     {
-      id: 'roles',
-      header: '角色',
-      cell: ({ row }) => (
-        <div className="flex flex-wrap gap-1">
-          {(row.original.roles ?? []).map((role) => (
-            <Badge key={role.id} variant="secondary" className="font-normal">
-              {role.name}
-            </Badge>
-          ))}
-          {!row.original.roles?.length && <span className="text-muted-foreground">—</span>}
-        </div>
-      ),
+      id: 'side',
+      header: '所属端',
+      cell: ({ row }) => {
+        const admin = (row.original.roles ?? []).some((role) => role.code === ADMIN_ROLE)
+        return (
+          <Badge variant={admin ? 'default' : 'secondary'} className="font-normal">
+            {admin ? '管理端' : '用户端'}
+          </Badge>
+        )
+      },
     },
     {
       accessorKey: 'enable',
       header: '启用',
-      cell: ({ row }) => (
-        <Switch
-          checked={row.original.enable}
-          disabled={toggleMutation.isPending}
-          onCheckedChange={(enable) => toggleMutation.mutate({ id: row.original.id, enable })}
-          aria-label="启用状态"
-        />
-      ),
+      cell: ({ row }) => {
+        // Disabling your own account signs you out with no way back in.
+        const self = row.original.id === user?.id
+        return (
+          <Switch
+            checked={row.original.enable}
+            disabled={toggleMutation.isPending || self}
+            onCheckedChange={(enable) => toggleMutation.mutate({ id: row.original.id, enable })}
+            aria-label={self ? '不能停用自己的账号' : '启用状态'}
+          />
+        )
+      },
     },
     {
       accessorKey: 'createTime',
@@ -136,7 +148,14 @@ export function UsersPage() {
               <KeyRoundIcon className="size-4" />
               重置密码
             </DropdownMenuItem>
-            <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(row.original)}>
+            <DropdownMenuItem
+              variant="destructive"
+              // Deleting yourself would end the session and, if you are the
+              // only administrator, leave the deployment with no way into the
+              // admin side short of editing the database.
+              disabled={row.original.id === user?.id}
+              onSelect={() => setDeleting(row.original)}
+            >
               <Trash2Icon className="size-4" />
               删除
             </DropdownMenuItem>
@@ -148,7 +167,7 @@ export function UsersPage() {
 
   return (
     <>
-      <PageHeader title="用户管理" description="后台账号及其角色。">
+      <PageHeader title="账号管理" description="所有账号，以及每个账号登录后进入哪个端。">
         <Button
           onClick={() => {
             setEditing(undefined)
@@ -156,7 +175,7 @@ export function UsersPage() {
           }}
         >
           <PlusIcon />
-          新增用户
+          新增账号
         </Button>
       </PageHeader>
 
@@ -171,7 +190,7 @@ export function UsersPage() {
         data={query.data?.pageData}
         loading={query.isPending}
         error={query.error}
-        emptyMessage={params.keyword ? '没有匹配的用户' : '还没有用户'}
+        emptyMessage={params.keyword ? '没有匹配的账号' : '还没有账号'}
       />
 
       <Pagination
@@ -182,14 +201,14 @@ export function UsersPage() {
         onPageSizeChange={params.setPageSize}
       />
 
-      <UserFormDialog open={formOpen} onOpenChange={setFormOpen} user={editing} />
+      <AccountFormDialog open={formOpen} onOpenChange={setFormOpen} account={editing} />
 
       <ResetPasswordDialog user={resetting} onClose={() => setResetting(undefined)} />
 
       <ConfirmDialog
         open={Boolean(deleting)}
         onOpenChange={(open) => !open && setDeleting(undefined)}
-        title="删除用户？"
+        title="删除账号？"
         description={`账号「${deleting?.username ?? ''}」及其角色关联会被移除。`}
         confirmLabel="删除"
         pending={removeMutation.isPending}

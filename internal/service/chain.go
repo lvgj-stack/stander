@@ -228,6 +228,8 @@ func ListChain(ctx context.Context, req *req.ListChainReq) (*resp.ListChainResp,
 	if err != nil {
 		return nil, err
 	}
+	// The chain's own key, and the preloaded node's.
+	redactForCaller(ctx, nil, chains, nil)
 
 	return &resp.ListChainResp{Chains: chains, TotalCount: cnt}, nil
 }

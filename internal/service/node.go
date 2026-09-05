@@ -240,6 +240,7 @@ func ListNode(ctx context.Context, r *req.ListNodeReq) (*resp.ListNodeResp, erro
 	if err != nil {
 		return nil, err
 	}
+	redactForCaller(ctx, nodes, nil, nil)
 
 	return &resp.ListNodeResp{Nodes: nodes, TotalCount: cnt}, nil
 }
@@ -304,6 +305,7 @@ func ListNodeChainRelationShips(ctx context.Context, r *req.ListNodeChainRelatio
 	if err != nil {
 		return nil, err
 	}
+	redactForCaller(ctx, nil, chains, nil)
 
 	return &resp.ListNodeChainRelationShipsResp{
 		Chains: chains,

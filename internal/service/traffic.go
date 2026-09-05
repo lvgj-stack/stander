@@ -64,6 +64,3 @@ func billingPeriod(user *entity.User) (from, to time.Time, ok bool) {
 	}
 	return from, to, true
 }
-
-// bytesToGB is the unit the API reports traffic in.
-func bytesToGB(b int64) int64 { return b / 1024 / 1024 / 1024 }

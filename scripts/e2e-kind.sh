@@ -129,7 +129,6 @@ log "Applying deploy/k8s/overlays/dev"
 k create namespace "$NAMESPACE" --dry-run=client -o yaml | k apply -f -
 k -n "$NAMESPACE" create configmap stander-schema \
   --from-file=init.sql=sql/init.sql \
-  --from-file=web_menu.sql=sql/web_menu.sql \
   --dry-run=client -o yaml | k apply -f -
 
 # Point the overlay at the images just built, the way a deploy would. Done on a
@@ -187,7 +186,14 @@ curl -s http://127.0.0.1:18123/metrics | grep -q '^stander_' || fail "/metrics e
 log "Console serves the SPA"
 curl -s http://127.0.0.1:18080/ | grep -q '<div id="root">' || fail "console did not serve index.html"
 # Client-side routes must fall back to index.html, or a refresh on any page 404s.
-[ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/pms/role)" = 200 ] || fail "SPA fallback missing"
+# Both sides are checked: /portal in particular has to reach the app rather than
+# the API, which owns the neighbouring /user prefix in the same nginx config.
+for route in /admin/nodes /portal/rules; do
+  [ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:18080$route")" = 200 ] \
+    || fail "SPA fallback missing for $route"
+  curl -s "http://127.0.0.1:18080$route" | grep -q '<div id="root">' \
+    || fail "$route did not serve index.html — is it being proxied to the API?"
+done
 
 log "Console reaches the API through its nginx proxy"
 captcha_headers=$(curl -s -D - -o "$WORK_DIR/captcha.out" http://127.0.0.1:18080/auth/captcha)
@@ -206,11 +212,14 @@ login=$(curl -s -X POST http://127.0.0.1:18080/auth/login \
   -d '{"username":"admin","password":"123456","captcha":"0000"}')
 grep -q '验证码不正确' <<<"$login" || fail "unexpected login response: $login"
 
+# The two sides of the console are decided by role, so the seeded roles are
+# what a fresh database has to have: without SUPER_ADMIN nobody reaches the
+# admin side at all.
 log "Schema and seed data landed"
 k -n "$NAMESPACE" exec deploy/mysql -- \
   mysql -ustander -pstander -Dstander -N -B -e \
-  "select count(*) from permission where code in ('ChainGroup','TrafficPlan','ForwardUser')" 2>/dev/null \
-  | tr -d '[:space:]' | grep -qx 3 \
-  || fail "sql/web_menu.sql did not apply — the console's newer menus would be invisible"
+  "select count(*) from role where code in ('SUPER_ADMIN','USER')" 2>/dev/null \
+  | tr -d '[:space:]' | grep -qx 2 \
+  || fail "sql/init.sql did not seed the SUPER_ADMIN / USER roles"
 
 log "All checks passed"

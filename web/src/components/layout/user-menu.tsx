@@ -14,7 +14,11 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useAuth } from '@/hooks/use-auth'
 
-export function UserMenu() {
+/**
+ * `home` is the side this menu is rendered on, so 个人资料 goes to that side's
+ * copy of the screen rather than to a fixed path that only exists on one.
+ */
+export function UserMenu({ home }: { home: string }) {
   const { user, logout, switchRole } = useAuth()
   const navigate = useNavigate()
 
@@ -43,7 +47,9 @@ export function UserMenu() {
         {roles.length > 1 && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuLabel className="text-xs text-muted-foreground">切换角色</DropdownMenuLabel>
+            <DropdownMenuLabel className="text-xs text-muted-foreground">
+              切换角色
+            </DropdownMenuLabel>
             {roles.map((role) => (
               <DropdownMenuItem
                 key={role.id}
@@ -68,7 +74,7 @@ export function UserMenu() {
         )}
 
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => navigate('/profile')}>
+        <DropdownMenuItem onSelect={() => navigate(`${home}/profile`)}>
           <UserIcon className="size-4" />
           个人资料
         </DropdownMenuItem>

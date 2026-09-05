@@ -17,7 +17,7 @@ import { formatTime } from '@/lib/format'
 import type { CurrentUser } from '@/types/api'
 
 export function ProfilePage() {
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
 
   return (
     <>
@@ -43,17 +43,10 @@ export function ProfilePage() {
             </div>
 
             <div className="space-y-1.5">
-              <p className="text-sm text-muted-foreground">角色</p>
-              <div className="flex flex-wrap gap-1.5">
-                {(user?.roles ?? []).map((role) => (
-                  <Badge
-                    key={role.id}
-                    variant={role.code === user?.currentRole?.code ? 'default' : 'secondary'}
-                  >
-                    {role.name}
-                  </Badge>
-                ))}
-              </div>
+              <p className="text-sm text-muted-foreground">所属端</p>
+              <Badge variant={isAdmin ? 'default' : 'secondary'}>
+                {isAdmin ? '管理端' : '用户端'}
+              </Badge>
             </div>
           </CardContent>
         </Card>

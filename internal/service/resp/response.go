@@ -89,19 +89,26 @@ type ListNodeResp struct {
 type ReportNetworkTrafficResp struct {
 }
 
+// GetUserPlanInfoResp reports one user's plan and consumption.
+//
+// Every traffic figure here is a byte count, like every other traffic figure
+// the API returns. These three used to be pre-divided into whole gigabytes,
+// which threw away everything below 1 GB — a user who had spent 800 MB was
+// shown 0 — and left the frontend formatting a gigabyte count with a
+// byte formatter, so 5 GB rendered as "5 B".
 type GetUserPlanInfoResp struct {
 	Username         string
 	ExpirationTime   time.Time
 	ResetTrafficTime time.Time
-	PlanTraffic      int32
-	UsedTraffic      int32
+	PlanTraffic      int64
+	UsedTraffic      int64
 	PlanName         string
 	DailyTraffics    []DailyTraffic
 }
 
 type DailyTraffic struct {
 	Date    time.Time
-	Traffic int32
+	Traffic int64
 }
 
 type EditChainResp struct {

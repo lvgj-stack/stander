@@ -93,8 +93,9 @@ export function LoginPage() {
           <div className="mx-auto mb-1 flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <NetworkIcon className="size-5" />
           </div>
-          <CardTitle>Stander 管理后台</CardTitle>
-          <CardDescription>端口转发系统控制台</CardDescription>
+          <CardTitle>Stander</CardTitle>
+          {/* One sign-in for both sides; the role decides which one you land on. */}
+          <CardDescription>端口转发系统</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>

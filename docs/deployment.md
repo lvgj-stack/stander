@@ -40,7 +40,7 @@ deploy/k8s/
 ```
 
 一共三个 Deployment：`stander-server`（API）、`stander-worker`（单例后台任务）、
-`stander-web`（管理后台控制台，nginx 托管静态文件）。
+`stander-web`（控制台，nginx 托管静态文件；管理端和用户端在同一份静态站点里）。
 
 ### 控制台与 API 的路由
 
@@ -48,15 +48,19 @@ Ingress 把 API 前缀直接路由到 `stander` Service，其余交给 `stander-
 
 | 路径 | 去向 |
 |---|---|
-| `/auth`、`/user`、`/role`、`/permission`、`/stander` | `stander`（管理后台 API） |
+| `/auth`、`/user`、`/role`、`/stander` | `stander`（控制台 API） |
 | `/api/v1` | `stander`（agent 回调、gost 上报） |
-| 其余 | `stander-web`（单页应用） |
+| 其余 | `stander-web`（单页应用：`/admin/*` 管理端、`/portal/*` 用户端） |
 
 **同一个 host 是有意的**：验证码的答案存在服务端 session cookie 里，跨域下需要
 `SameSite=None` 才能带上，同源省掉这一整类问题。
 
-同一份前缀清单也出现在 `web/nginx.conf` 里——那是 web 镜像自己反代 API 时用的
-（docker compose、单独 `docker run`）。**加新前缀两处都要改。**
+同一份前缀清单也出现在 `web/nginx.conf` 和 `web/vite.config.ts` 里——分别是 web
+镜像自己反代 API 时（docker compose、单独 `docker run`）和 vite dev server 用的。
+**加新前缀三处都要改。**
+
+用户端的路径是 `/portal/*` 而不是 `/user/*`，因为 `/user` 已经是账号接口的前缀，
+上面这张表会把它整个路由到后端。
 
 控制台 Pod 用的是 `nginx-unprivileged` 镜像，跑在 uid 101、只读根文件系统上，
 和 Go 那两个 workload 同一套安全约束。它挂了三个 emptyDir（`/etc/nginx/conf.d`、
@@ -87,7 +91,6 @@ docker build -t your-registry/stander-web:0.1.0 ./web
 ```bash
 # 1. 建库并导入 schema（一次性）
 mysql -h <host> -u root -p stander < sql/init.sql
-mysql -h <host> -u root -p stander < sql/web_menu.sql
 
 # 2. 创建 Secret（不要进 git）
 kubectl create namespace stander
@@ -114,13 +117,9 @@ dev overlay 自带一个临时 MySQL。schema 需要带外创建 ConfigMap——
 ```bash
 kubectl create namespace stander-dev
 kubectl -n stander-dev create configmap stander-schema \
-  --from-file=init.sql=sql/init.sql \
-  --from-file=web_menu.sql=sql/web_menu.sql
+  --from-file=init.sql=sql/init.sql
 kubectl apply -k deploy/k8s/overlays/dev
 ```
-
-`web_menu.sql` 不能漏：控制台的链路组、流量套餐、转发用户三个菜单靠它在
-`permission` 表里的记录才可见，缺了这三条对任何人都不显示——包括超级管理员。
 
 整套流程有脚本，也是 CI 跑的那一个：
 
@@ -217,7 +216,7 @@ Deployment（`replicas: 1`），各自配自己的 Secret，靠 nodeSelector 钉
   两者都验证过跨副本可用。
 - **数据库是单点。** 清单里没有包含 MySQL 的高可用方案，生产上请用托管数据库或
   自建主从。
-- **单端口。** 管理后台和控制面共用 `Server.Port`。agent 回拨和前端访问是同一个
+- **单端口。** 控制台和控制面共用 `Server.Port`。agent 回拨和前端访问是同一个
   地址，Ingress 上不需要分路径。
 - **没有 ServiceMonitor / PodMonitor。** 清单用的是 `prometheus.io/*` 注解，
   适配基于注解发现的部署方式。用 Prometheus Operator 的话需要自己补一个

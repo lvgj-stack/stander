@@ -12,6 +12,13 @@ interface ThemeState {
 const STORAGE_KEY = 'stander.theme'
 const ThemeContext = createContext<ThemeState | null>(null)
 
+/**
+ * The theme this browser has chosen, defaulting to light.
+ *
+ * The default is a deliberate "light", not "system": a viewer whose OS is set
+ * to dark would otherwise land in a dark console they never asked for. Dark is
+ * still one toggle away and is remembered once picked.
+ */
 function readStored(): Theme {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
@@ -19,7 +26,7 @@ function readStored(): Theme {
   } catch {
     /* Storage can throw outright in a locked-down browser. */
   }
-  return 'dark'
+  return 'light'
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {

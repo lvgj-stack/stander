@@ -10,7 +10,13 @@ import (
 	"github.com/lvgj-stack/stander/internal/admin/middleware"
 )
 
-// RegisterAdmin mounts the admin console API at the root of h.
+// RegisterAdmin mounts the console API at the root of h.
+//
+// It serves both sides of the frontend — the admin console and the user
+// portal. Which side a signed-in account gets is decided by its role, not by a
+// per-route permission lookup: SUPER_ADMIN gets the admin console, everyone
+// else the user portal, and the service layer scopes rows to the caller the
+// same way it always has (identity.Principal.IsSuperAdmin).
 func RegisterAdmin(h *server.Hertz) {
 	// The session only carries the captcha id between /auth/captcha and /auth/login.
 	h.Use(sessions.New("mysession", cookie.NewStore([]byte("captch"))))
@@ -33,30 +39,33 @@ func RegisterAdmin(h *server.Hertz) {
 	authed.POST("/auth/password", handler.Auth.Password)
 	authed.POST("/auth/current-role/switch/:role", handler.Auth.SwitchRole)
 
-	authed.GET("/user", handler.User.List)
-	authed.POST("/user", handler.User.Add)
-	authed.DELETE("/user/:id", handler.User.Delete)
-	authed.PATCH("/user/password/reset/:id", handler.User.Update)
-	authed.PATCH("/user/:id", handler.User.Update)
-	authed.PATCH("/user/profile/:id", handler.User.Profile)
+	// Every signed-in account, on either side.
 	authed.GET("/user/detail", handler.User.Detail)
+	// Editing a profile is self-service; the handler checks the row belongs to
+	// the caller.
+	authed.PATCH("/user/profile/:id", handler.User.Profile)
 
-	authed.GET("/role", handler.Role.List)
-	authed.POST("/role", handler.Role.Add)
-	authed.PATCH("/role/:id", handler.Role.Update)
-	authed.DELETE("/role/:id", handler.Role.Delete)
-	authed.PATCH("/role/users/add/:id", handler.Role.AddUser)
-	authed.PATCH("/role/users/remove/:id", handler.Role.RemoveUser)
-	authed.GET("/role/page", handler.Role.ListPage)
-	authed.GET("/role/permissions/tree", handler.Role.PermissionsTree)
+	// Administrators only. These manage other people's accounts: without the
+	// gate any signed-in user could PATCH themselves a SUPER_ADMIN role, reset
+	// somebody's password, or delete an account. A plain forwarding user holds
+	// a valid token here — the user portal is served by this same API — so
+	// "absent from the user portal's screens" is not a control.
+	admin := authed.Group("", middleware.SuperAdmin())
+	admin.GET("/user", handler.User.List)
+	admin.POST("/user", handler.User.Add)
+	admin.DELETE("/user/:id", handler.User.Delete)
+	admin.PATCH("/user/password/reset/:id", handler.User.Update)
+	admin.PATCH("/user/:id", handler.User.Update)
 
-	authed.POST("/permission", handler.Permissions.Add)
-	authed.PATCH("/permission/:id", handler.Permissions.PatchPermission)
-	authed.DELETE("/permission/:id", handler.Permissions.Delete)
-	authed.GET("/permission/tree", handler.Permissions.List)
-	authed.GET("/permission/menu/tree", handler.Permissions.List)
-	authed.GET("/permission/button/:id", handler.Permissions.Button)
+	// Read-only, and administrators only: the account form uses it to pick
+	// which side of the console a user belongs to. Role CRUD and the whole
+	// /permission/* tree are gone — the console no longer builds its menu out
+	// of permission rows.
+	admin.GET("/role", handler.Role.List)
 
+	// The forwarding API. Both sides call these; the service layer scopes each
+	// action to the caller (identity.Principal.IsSuperAdmin), so the
+	// admin-only actions among them are gated there rather than here.
 	authed.POST("/stander/node", handler.Node.Handle)
 	authed.POST("/stander/chain", handler.Chain.Handle)
 	authed.POST("/stander/rule", handler.Rule.Handle)

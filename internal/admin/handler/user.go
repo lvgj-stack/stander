@@ -13,6 +13,7 @@ import (
 	"github.com/lvgj-stack/stander/internal/admin/inout"
 	"github.com/lvgj-stack/stander/internal/admin/model"
 	"github.com/lvgj-stack/stander/internal/db"
+	"github.com/lvgj-stack/stander/internal/identity"
 	"github.com/lvgj-stack/stander/internal/model/entity"
 	"github.com/lvgj-stack/stander/internal/service"
 	standerreq "github.com/lvgj-stack/stander/internal/service/req"
@@ -94,12 +95,30 @@ func (user) List(c context.Context, ctx *app.RequestContext) {
 	Resp.Succ(ctx, data)
 }
 
+// Profile updates one profile row.
+//
+// Self-service: this is the 个人资料 screen on both sides of the console, so it
+// cannot be gated on being an administrator. The row is addressed by profile
+// id rather than user id, so ownership has to be looked up — otherwise any
+// signed-in account could rewrite anyone's nickname, email and avatar by
+// counting upwards.
 func (user) Profile(c context.Context, ctx *app.RequestContext) {
 	var params inout.PatchProfileUserReq
 	if err := ctx.BindJSON(&params); err != nil {
 		Resp.Err(ctx, 20001, err.Error())
 		return
 	}
+
+	if !identity.FromContext(c).IsSuperAdmin() {
+		uid, _ := ctx.Get("uid")
+		var owner int64
+		db.Dao.Model(model.Profile{}).Where("id=? and userId=?", params.Id, uid).Count(&owner)
+		if owner == 0 {
+			Resp.Err(ctx, 403, "只能修改自己的资料")
+			return
+		}
+	}
+
 	err := db.Dao.Model(model.Profile{}).Where("id=?", params.Id).Updates(model.Profile{
 		Gender:   params.Gender,
 		Address:  params.Address,

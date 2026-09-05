@@ -38,7 +38,21 @@ import type { Rule, RuleTestResult } from '@/types/api'
 
 import { RuleFormDialog } from './rule-form-dialog'
 
-export function RulesPage() {
+/**
+ * The rules screen, mounted by both sides of the console.
+ *
+ * There is no per-side variant because there is no per-side behaviour: the
+ * backend scopes `ListRules` to the caller's own rows unless they are the
+ * super admin, and every write goes through the same checks. Only the wording
+ * differs, which is what these props are for.
+ */
+export function RulesPage({
+  title = '转发规则',
+  description = '入口端口到目标地址的转发关系，可经链路中继。',
+}: {
+  title?: string
+  description?: string
+} = {}) {
   const params = useTableParams()
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Rule | undefined>()
@@ -149,7 +163,7 @@ export function RulesPage() {
 
   return (
     <>
-      <PageHeader title="转发规则" description="入口端口到目标地址的转发关系，可经链路中继。">
+      <PageHeader title={title} description={description}>
         <Button
           onClick={() => {
             setEditing(undefined)

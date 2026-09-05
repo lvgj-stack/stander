@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -9,9 +10,20 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"github.com/lvgj-stack/stander/internal/identity"
 	"github.com/lvgj-stack/stander/internal/model/dal"
 	"github.com/lvgj-stack/stander/internal/service/req"
 )
+
+// adminCtx is the caller these actions require. The plan catalogue is an
+// administrative screen's data, so a bare context.Background() is now refused —
+// see TestListPlansRefusesANonAdmin.
+func adminCtx() context.Context {
+	return identity.NewContext(context.Background(), identity.Principal{
+		UserID:   1,
+		RoleCode: identity.RoleSuperAdmin,
+	})
+}
 
 // newMockDB points the gorm-gen query layer at a mock driver.
 //
@@ -48,7 +60,7 @@ func TestListPlansMapsRowsToResponse(t *testing.T) {
 			AddRow(1, "月付 100G", 107374182400, 0).
 			AddRow(2, "年付 2T", 2199023255552, 3))
 
-	got, err := ListPlans(context.Background(), &req.ListPlansReq{})
+	got, err := ListPlans(adminCtx(), &req.ListPlansReq{})
 	if err != nil {
 		t.Fatalf("ListPlans: %v", err)
 	}
@@ -72,7 +84,38 @@ func TestListPlansPropagatesQueryError(t *testing.T) {
 	mock := newMockDB(t)
 	mock.ExpectQuery("SELECT \\* FROM `traffic_plan`").WillReturnError(gorm.ErrInvalidDB)
 
-	if _, err := ListPlans(context.Background(), &req.ListPlansReq{}); err == nil {
+	if _, err := ListPlans(adminCtx(), &req.ListPlansReq{}); err == nil {
 		t.Fatal("expected the query error to propagate")
+	}
+}
+
+// The user portal is served by the same API as the admin console, so a
+// forwarding user holds a valid token against this action. It must be refused
+// before it reaches the database — a refusal that queried first would still
+// have leaked timing and error shape, and AssociatePlan next door would hand
+// out quota.
+func TestListPlansRefusesANonAdmin(t *testing.T) {
+	mock := newMockDB(t)
+
+	ctx := identity.NewContext(context.Background(), identity.Principal{UserID: 3, RoleCode: "USER"})
+	if _, err := ListPlans(ctx, &req.ListPlansReq{}); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("ListPlans as USER = %v, want ErrForbidden", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("the refusal must not have hit the database: %v", err)
+	}
+}
+
+func TestAssociatePlanRefusesANonAdmin(t *testing.T) {
+	mock := newMockDB(t)
+
+	ctx := identity.NewContext(context.Background(), identity.Principal{UserID: 3, RoleCode: "USER"})
+	// A user handing themselves the largest plan in the table.
+	_, err := AssociatePlan(ctx, &req.AssociatePlanReq{UserId: 3, PlanId: 2})
+	if !errors.Is(err, ErrForbidden) {
+		t.Fatalf("AssociatePlan as USER = %v, want ErrForbidden", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("the refusal must not have hit the database: %v", err)
 	}
 }

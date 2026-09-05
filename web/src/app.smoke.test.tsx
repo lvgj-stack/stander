@@ -55,7 +55,7 @@ describe('app composition', () => {
   it('mounts the login screen through the full provider stack', async () => {
     renderLogin()
 
-    expect(screen.getByText('Stander 管理后台')).toBeTruthy()
+    expect(screen.getByText('Stander')).toBeTruthy()
     expect(screen.getByLabelText('用户名')).toBeTruthy()
     expect(screen.getByLabelText('密码')).toBeTruthy()
     expect(screen.getByLabelText('验证码')).toBeTruthy()

@@ -35,6 +35,10 @@ func TestRule(ctx context.Context, req *req2.TestRuleReq) (*resp.TestRuleResp, e
 
 	res := &resp.TestRuleResp{}
 
+	if err := checkRuleOwnership(ctx, req.ID); err != nil {
+		return nil, err
+	}
+
 	rule, err := dal.Rule.WithContext(ctx).Where(dal.Rule.ID.Eq(req.ID)).Preload(dal.Rule.Chain, dal.Rule.Node).First()
 	if err != nil {
 		return nil, err
@@ -116,6 +120,17 @@ func AddRule(ctx context.Context, req *req2.AddRuleReq) (*resp.AddRuleResp, erro
 	}
 	uid := identity.FromContext(ctx).UserID
 
+	// The rule form only offers nodes and chains the caller holds, but the
+	// form is not the boundary — these ids arrive in a request body.
+	if err := checkUserNodePermission(ctx, req.NodeId); err != nil {
+		return nil, err
+	}
+	if req.ChainId != 0 {
+		if err := checkUserChainPermission(ctx, req.ChainId); err != nil {
+			return nil, err
+		}
+	}
+
 	chain, err := dal.Q.Chain.WithContext(ctx).Where(dal.Chain.ID.Eq(req.ChainId)).First()
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
@@ -165,12 +180,8 @@ func DelRule(ctx context.Context, req *req2.DelRuleReq) (*resp.DelRuleResp, erro
 		return &resp.DelRuleResp{}, nil
 	}
 
-	uid := identity.FromContext(ctx).UserID
-	if !identity.FromContext(ctx).IsSuperAdmin() {
-		_, err := dal.Rule.WithContext(ctx).Where(dal.Rule.UserID.Eq(uid), dal.Rule.ID.Eq(req.ID)).First()
-		if err != nil {
-			return nil, err
-		}
+	if err := checkRuleOwnership(ctx, req.ID); err != nil {
+		return nil, err
 	}
 
 	rule, err := dal.Rule.WithContext(ctx).Where(dal.Rule.ID.Eq(req.ID)).First()
@@ -246,6 +257,8 @@ func ListRule(ctx context.Context, req *req2.ListRuleReq) (*resp.ListRuleResp, e
 	if err != nil {
 		return nil, err
 	}
+	// The preloaded node and chain carry their keys.
+	redactForCaller(ctx, nil, nil, rules)
 
 	return &resp.ListRuleResp{Rules: rules, TotalCount: cnt}, nil
 }
@@ -264,12 +277,23 @@ func ModifyRule(ctx context.Context, req *req2.ModifyRuleReq) (*resp.ModifyRuleR
 		return &resp.ModifyRuleResp{}, nil
 	}
 
+	if err := checkRuleOwnership(ctx, req.ID); err != nil {
+		return nil, err
+	}
+
 	rule, err := dal.Rule.WithContext(ctx).Where(dal.Rule.ID.Eq(req.ID)).Preload(dal.Rule.Node, dal.Rule.Chain).First()
 	if err != nil {
 		return nil, err
 	}
 	node := rule.Node
 	originChain := rule.Chain
+
+	// A user may move their rule onto another chain, but only one they hold.
+	if req.ChainId != 0 && req.ChainId != originChain.ID {
+		if err := checkUserChainPermission(ctx, req.ChainId); err != nil {
+			return nil, err
+		}
+	}
 
 	updateRule := entity.Rule{}
 	agentModifyReq := req2.ModifyRuleReq{
@@ -322,9 +346,19 @@ func ModifyRule(ctx context.Context, req *req2.ModifyRuleReq) (*resp.ModifyRuleR
 	return &resp.ModifyRuleResp{}, nil
 }
 
+// ModifyRules rewrites the destination host of several rules at once.
+//
+// Scoped like every other rule action: a non-admin's selection is intersected
+// with the rules they own, so ids they do not hold are silently dropped rather
+// than repointed. Without that, one request repoints an arbitrary set of other
+// tenants' forwards at a host of the caller's choosing.
 func ModifyRules(ctx context.Context, req *req2.ModifyRulesReq) (*resp.EmptyResp, error) {
+	q := []gen.Condition{dal.Rule.ID.In(req.RuleIDs...)}
+	if !identity.FromContext(ctx).IsSuperAdmin() {
+		q = append(q, dal.Rule.UserID.Eq(identity.FromContext(ctx).UserID))
+	}
 
-	rules, err := dal.Rule.WithContext(ctx).Where(dal.Rule.ID.In(req.RuleIDs...)).Preload(dal.Rule.Node, dal.Rule.Chain).Find()
+	rules, err := dal.Rule.WithContext(ctx).Where(q...).Preload(dal.Rule.Node, dal.Rule.Chain).Find()
 	if err != nil {
 		return nil, err
 	}

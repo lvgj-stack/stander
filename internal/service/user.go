@@ -12,7 +12,17 @@ import (
 	"github.com/lvgj-stack/stander/internal/service/resp"
 )
 
+// GetUserPlanInfo reports the plan, quota and recent daily consumption of one
+// user.
+//
+// A caller who is not the super admin may only ask about themselves. The user
+// id used to be taken from the request verbatim, so any signed-in account
+// could read anyone else's plan and traffic history by changing one number —
+// harmless while the only caller was the admin console, not harmless now that
+// the user portal calls it too.
 func GetUserPlanInfo(ctx context.Context, r *req.GetUserPlanInfoReq) (*resp.GetUserPlanInfoResp, error) {
+	r.UserId = scopeToCaller(ctx, r.UserId)
+
 	user, err := dal.User.WithContext(ctx).Where(dal.User.ID.Eq(r.UserId)).Preload(dal.User.TrafficPlan).First()
 	if err != nil {
 		return nil, err
@@ -28,7 +38,6 @@ func GetUserPlanInfo(ctx context.Context, r *req.GetUserPlanInfoReq) (*resp.GetU
 	}
 	expireTime := time.Now()
 	resetTrafficTime := time.Now()
-	usedTraffic := int64(0)
 	plan := "测试套餐"
 	if user.ExpirationTime != nil {
 		expireTime = *user.ExpirationTime
@@ -39,17 +48,16 @@ func GetUserPlanInfo(ctx context.Context, r *req.GetUserPlanInfoReq) (*resp.GetU
 	if user.TrafficPlan.PlanName != nil {
 		plan = *user.TrafficPlan.PlanName
 	}
-	used, err := PeriodTrafficUsage(ctx, user)
+	usedTraffic, err := PeriodTrafficUsage(ctx, user)
 	if err != nil {
 		return nil, err
 	}
-	usedTraffic = bytesToGB(used)
 
 	var dailyTraffics []resp.DailyTraffic
 	for _, df := range dfs {
 		dailyTraffics = append(dailyTraffics, resp.DailyTraffic{
 			Date:    df.Date,
-			Traffic: int32(df.TotalTraffic / 1024 / 1024 / 1024),
+			Traffic: df.TotalTraffic,
 		})
 
 	}
@@ -57,14 +65,25 @@ func GetUserPlanInfo(ctx context.Context, r *req.GetUserPlanInfoReq) (*resp.GetU
 		Username:         *user.Username,
 		ExpirationTime:   expireTime,
 		ResetTrafficTime: resetTrafficTime,
-		PlanTraffic:      int32(user.TrafficPlan.TotalTraffic / 1024 / 1024 / 1024),
-		UsedTraffic:      int32(usedTraffic),
+		PlanTraffic:      user.TrafficPlan.TotalTraffic,
+		UsedTraffic:      usedTraffic,
 		PlanName:         plan,
 		DailyTraffics:    dailyTraffics,
 	}, nil
 }
 
+// ListUsers reports every account with its plan and consumption.
+//
+// Administrators only. There is no per-caller narrowing that would make sense
+// here: the whole point of the action is the cross-account view, and it
+// returns exactly the plan, expiry and byte-level consumption that
+// GetUserPlanInfo scopes to the caller — in bulk. A user who needs their own
+// figures calls GetUserPlanInfo.
 func ListUsers(ctx context.Context, r *req.ListUsersReq) (*resp.ListUsersResp, error) {
+	if err := requireSuperAdmin(ctx); err != nil {
+		return nil, err
+	}
+
 	var q []gen.Condition
 
 	if r.Username != "" {
@@ -93,14 +112,16 @@ func ListUsers(ctx context.Context, r *req.ListUsersReq) (*resp.ListUsersResp, e
 	}
 	var userTos []*resp.UserTo
 	for _, user := range users {
+		// Bytes, matching TrafficPlan.TotalTraffic, which the caller shows
+		// this against. It used to be divided down to whole gigabytes here
+		// while the quota beside it stayed in bytes.
 		used, err := PeriodTrafficUsage(ctx, user)
 		if err != nil {
 			return nil, err
 		}
-		usedTraffic := bytesToGB(used)
 		userTos = append(userTos, &resp.UserTo{
 			User:        user,
-			UsedTraffic: usedTraffic,
+			UsedTraffic: used,
 		})
 	}
 	return &resp.ListUsersResp{
@@ -111,7 +132,14 @@ func ListUsers(ctx context.Context, r *req.ListUsersReq) (*resp.ListUsersResp, e
 	}, nil
 }
 
+// EditUser writes a user's subscription expiry. Administrators only — it takes
+// the target id from the request, so without this check any account could
+// extend its own subscription or expire somebody else's.
 func EditUser(ctx context.Context, r *req.EditUserReq) (*resp.EmptyResp, error) {
+	if err := requireSuperAdmin(ctx); err != nil {
+		return nil, err
+	}
+
 	updatedFields := make(map[string]any)
 	if r.ExpirationTime != nil {
 		updatedFields["expiration_time"] = r.ExpirationTime

@@ -1,12 +1,12 @@
 # Stander
 
-端口转发系统。控制面、管理后台、转发 agent 在同一个仓库、同一个 Go module、
+端口转发系统。控制面、控制台、转发 agent 在同一个仓库、同一个 Go module、
 同一个二进制里，用 cobra 子命令决定入口。
 
 ## 子命令
 
 ```bash
-stander server                     # API：控制面 + 管理后台（默认含进程内后台任务）
+stander server                     # API：控制面 + 控制台（默认含进程内后台任务）
 stander server --worker=false      # 只起 API，多副本部署时用
 stander worker                     # 只起后台任务，必须恰好一个实例
 stander agent -a <addr> -k <key>   # 转发节点
@@ -20,11 +20,11 @@ stander version
 ## 快速开始
 
 ```bash
-# 起一个本地栈：MySQL + stander + 管理后台前端
+# 起一个本地栈：MySQL + stander + 控制台前端
 docker compose -f deploy/docker-compose.yaml up
 
 curl localhost:8123/healthz
-open http://localhost:8080        # 管理后台，默认 admin / 123456
+open http://localhost:8080        # 控制台，默认 admin / 123456（管理端）
 ```
 
 或者直接跑源码：
@@ -37,6 +37,22 @@ go run . server
 
 配置文件是可选的，所有配置项都能用 `STANDER_` 前缀的环境变量提供，
 详见 [configuration.md](docs/configuration.md)。
+
+## 两个端
+
+控制台是一份静态站点，里面两套写死的路由，登录后按角色分流：
+
+| 端 | 路径 | 谁进得来 | 有什么 |
+|---|---|---|---|
+| 管理端 | `/admin/*` | `SUPER_ADMIN` | 节点、链路、链路组、转发规则、流量套餐、转发用户、账号管理 |
+| 用户端 | `/portal/*` | 其余所有角色 | 自己的流量与套餐、自己的转发规则、可用节点、个人资料 |
+
+分流点只有一条：`identity.Principal.IsSuperAdmin()`——后端本来也只有这一条授权
+边界，所以端不多不少正好两个。角色除了决定进哪个端，不再有别的作用。
+
+菜单和路由都在前端代码里（`web/src/routes/index.tsx` 加两个 nav 常量）。加页面
+不需要往数据库里补记录；早先那套由 `permission` 表在运行时生成菜单和 tab 的机制
+已经删掉，已有的库用 `sql/migrate-2026-09-05-two-sides.sql` 清理。
 
 ## 部署到 Kubernetes
 
@@ -64,14 +80,14 @@ API 无状态、可任意扩副本；`stander worker` 是单例，必须恰好�
 | `internal/service/` | 领域逻辑（不依赖任何 web 框架，有测试守着这条边界） |
 | `internal/worker/` | 单例后台任务 |
 | `internal/identity/` | 调用方身份（类型化 Principal，走 context.Context） |
-| `internal/admin/` | 管理后台的 handler / 请求响应结构 / 中间件 / 模型 |
+| `internal/admin/` | 控制台后端的 handler / 请求响应结构 / 中间件 / 模型 |
 | `internal/forward/` | 转发数据面：connector、manager、selector |
 | `internal/model/` | gorm-gen 产出的 entity 与 dal |
 | `internal/captcha/` | 数据库支撑的验证码存储（多副本可用） |
 | `internal/observability/` | Prometheus 指标与结构化日志 |
-| `web/` | 管理后台前端（React + shadcn/ui，构建成静态站点） |
+| `web/` | 控制台前端（React + shadcn/ui；管理端与用户端在同一份静态站点里） |
 | `sql/init.sql` | 建表与初始数据 |
-| `sql/web_menu.sql` | 前端新增页面的菜单权限记录 |
+| `sql/migrate-*.sql` | 针对已有库的一次性迁移，新库不需要 |
 | `deploy/` | Dockerfile 编排、Kubernetes 清单 |
 | `.github/workflows/` | CI 与发布流水线 |
 | `scripts/e2e-kind.sh` | 在 kind 集群上部署并验证整套系统（CI 跑的就是它） |
@@ -80,7 +96,7 @@ API 无状态、可任意扩副本；`stander worker` 是单例，必须恰好�
 
 一个 Hertz 实例，三组前缀：
 
-- 管理后台在根路径：`/auth/*`、`/user/*`、`/role/*`、`/permission/*`、`/stander/*`
+- 控制台在根路径：`/auth/*`、`/user/*`、`/role/*`、`/stander/*`
 - 控制面在 `/api/v1/*`，供 agent 回调和 gost 上报使用
 - 探针 `/healthz`、`/readyz`，指标 `/metrics`
 
@@ -96,12 +112,23 @@ API 无状态、可任意扩副本；`stander worker` 是单例，必须恰好�
 | [development.md](docs/development.md) | 本地开发、怎么加一个领域动作、代码生成、测试 |
 | [api.md](docs/api.md) | HTTP 接口文档 |
 
-## 升级提示（从合仓前的两个进程迁移）
+## 升级提示
 
-管理后台和控制面原来是两个端口两个进程，现在是一个端口：
+从动态菜单迁到两个端（已有的库）：
+
+```bash
+mysqldump -u root -p stander permission role_permissions_permission > /tmp/perm-backup.sql
+mysql -u root -p stander < sql/migrate-2026-09-05-two-sides.sql
+```
+
+会删掉 `permission` 和 `role_permissions_permission` 两张表，以及示例角色
+`ROLE_QA`（挂在它下面的账号先归还给 `USER`）。不跑也不会坏——后端已经不读这两张
+表了——只是留着两张没人用的表。
+
+从合仓前的两个进程迁移：控制台和控制面原来是两个端口两个进程，现在是一个端口：
 
 - **agent 不用动**——端口沿用控制面原来的 8123
-- **前端要改**——baseURL 从原来的管理后台端口改成 8123
+- **前端要改**——baseURL 从原来的控制台端口改成 8123
 - `scripts/install.sh` 生成的 systemd unit 已改成
   `stander-agent agent -a ... -k ...`（多了 `agent` 子命令）
 

@@ -98,6 +98,7 @@ export interface TrafficPlan {
   id: number
   createdAt: string | null
   updatedAt: string | null
+  /** Quota per period, in bytes. */
   totalTraffic: number
   period: number | null
   planName: string | null
@@ -114,14 +115,23 @@ export interface ForwardUser {
   expirationTime: string | null
   resetTrafficTime: string | null
   traffic_plan?: TrafficPlan
+  /** Consumed this period, in bytes — the same unit as `traffic_plan.totalTraffic`. */
   UsedTraffic: number
 }
 
 export interface DailyTraffic {
   Date: string
+  /** Bytes consumed that day. */
   Traffic: number
 }
 
+/**
+ * One user's plan and consumption.
+ *
+ * Every traffic figure is a byte count. They used to arrive pre-divided into
+ * whole gigabytes while every neighbouring field stayed in bytes, so anything
+ * under 1 GB read as zero and `formatBytes` turned 5 GB into "5 B".
+ */
 export interface UserPlanInfo {
   Username: string
   ExpirationTime: string
@@ -142,17 +152,13 @@ export interface RuleTestResult {
   ping?: number
 }
 
-// ---------------------------------------------------------------------- RBAC
+// ------------------------------------------------------------- accounts
 
 export interface Role {
   id: number
   code: string
   name: string
   enable: boolean
-}
-
-export interface RoleWithPermissions extends Role {
-  permissionIds: number[] | null
 }
 
 export interface Profile {
@@ -189,31 +195,4 @@ export interface AdminUser {
   address: string
   email: string
   roles: Role[] | null
-}
-
-export type PermissionType = 'MENU' | 'BUTTON'
-
-/**
- * A permission row. `component` holds a Vue file path left over from the
- * previous frontend; this app routes statically and ignores it, using only
- * `code` to decide what a role may see.
- */
-export interface Permission {
-  id: number
-  name: string
-  code: string
-  type: PermissionType
-  parentId: number | null
-  path: string | null
-  redirect: string | null
-  icon: string | null
-  component: string | null
-  layout: string | null
-  keepAlive: number | null
-  method: string | null
-  description: string | null
-  show: number
-  enable: number
-  order: number
-  children?: Permission[] | null
 }

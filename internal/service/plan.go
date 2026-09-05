@@ -12,7 +12,18 @@ import (
 
 // AssociatePlan attaches a traffic plan to a user and moves the expiry and
 // traffic-reset marks forward by the plan's period.
+//
+// Administrators only. Both the user and the plan come from the request, so
+// without this any account could hand itself the largest plan in the table
+// along with a fresh expiry — which is the one thing the whole subscription
+// model rests on. The admin console reaches it through 转发用户 › 关联套餐, and
+// handler.User.Add calls it in-process while creating an account, both of
+// which already run as an administrator.
 func AssociatePlan(ctx context.Context, r *req.AssociatePlanReq) (*resp.EmptyResp, error) {
+	if err := requireSuperAdmin(ctx); err != nil {
+		return nil, err
+	}
+
 	plan, err := dal.TrafficPlan.WithContext(ctx).Where(dal.TrafficPlan.ID.Eq(r.PlanId)).First()
 	if err != nil {
 		return nil, err
@@ -40,7 +51,13 @@ func AssociatePlan(ctx context.Context, r *req.AssociatePlanReq) (*resp.EmptyRes
 	return &resp.EmptyResp{}, nil
 }
 
+// ListPlans returns every traffic plan. Administrators only — this is the
+// 流量套餐 screen's data, and a user learns their own plan from
+// GetUserPlanInfo rather than from the catalogue.
 func ListPlans(ctx context.Context, r *req.ListPlansReq) (*resp.ListPlansResp, error) {
+	if err := requireSuperAdmin(ctx); err != nil {
+		return nil, err
+	}
 
 	plans, err := dal.TrafficPlan.WithContext(ctx).Find()
 	if err != nil {
