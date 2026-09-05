@@ -7,8 +7,10 @@
 -- 角色只剩一个作用：决定登录后进哪个端（SUPER_ADMIN 进管理端，其余进用户端）。
 -- 这两张表因此没有任何读者，后端的 /permission/* 和角色写接口也一并删了。
 --
--- 这个脚本会丢数据，且不可逆。执行前先备份：
---   mysqldump -u root -p stander permission role_permissions_permission > /tmp/perm-backup.sql
+-- 这个脚本会丢数据，且不可逆。执行前先备份——除了要删的两张权限表，角色的两张表
+-- 也会被改（脚本末尾把每个账号收敛成一个角色）：
+--   mysqldump -u root -p stander permission role_permissions_permission \
+--     role user_roles_role > /tmp/perm-backup.sql
 
 DROP TABLE IF EXISTS role_permissions_permission;
 DROP TABLE IF EXISTS permission;
@@ -40,3 +42,17 @@ WHERE ur.roleId = (SELECT id FROM (SELECT id FROM role WHERE code = 'ROLE_QA') q
 DELETE FROM user_roles_role
 WHERE roleId IN (SELECT id FROM (SELECT id FROM role WHERE code = 'ROLE_QA') q);
 DELETE FROM role WHERE code = 'ROLE_QA';
+
+-- 一个账号一个角色。库里 admin 通常挂着两行——SUPER_ADMIN 加一个 USER——那是为了
+-- 用右上角的「切换角色」预览用户端，而那个接口已经删了。多出来的行不改变任何行为
+-- （登录只看有没有 SUPER_ADMIN），但账号表单只提供一个角色，下一次编辑这个账号时
+-- 它会被替换成单独一行；先在这里抹平，免得同一个库里两种形状并存。
+--
+-- 多表 DELETE 的自连接是必须的：MySQL 不允许在 DELETE 的子查询里读同一张表
+-- （ER_UPDATE_TABLE_USED），JOIN 则可以。
+-- 没有 SUPER_ADMIN 这个角色时标量子查询是 NULL，连接条件不成立，一行也不会删。
+DELETE ur FROM user_roles_role ur
+JOIN user_roles_role adm
+  ON adm.userId = ur.userId
+ AND adm.roleId = (SELECT id FROM role WHERE code = 'SUPER_ADMIN')
+WHERE ur.roleId <> adm.roleId;

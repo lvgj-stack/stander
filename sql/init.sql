@@ -212,8 +212,10 @@ INSERT INTO `profile` VALUES (1,0,'https://wpimg.wallstcn.com/f778738c-e4f8-4870
 -- 没有任何代码读它，随权限表一起删了。
 INSERT INTO `role` VALUES (1,'SUPER_ADMIN','超级管理员',1),(4,'USER','普通用户',1);
 INSERT INTO `user` (`id`,`username`,`password`,`enable`,`createTime`,`updateTime`) VALUES (1,'admin','e10adc3949ba59abbe56e057f20f883e',1,'2023-11-18 16:18:59.150632','2024-10-12 08:07:01.652188'),(3,'user01','e10adc3949ba59abbe56e057f20f883e',1,'2024-10-13 22:55:16.601588','2024-10-13 22:55:16.601588');
--- admin -> 管理端，user01 -> 用户端。
--- admin 同时挂着 USER，是为了能用右上角的「切换角色」预览用户端；登录时取 id
--- 最小的角色作为当前角色，所以默认仍然进管理端。迁移脚本会给已有的库留下同样
--- 的两行，两种装法的 admin 因此行为一致。
-INSERT INTO `user_roles_role` VALUES (1,1),(1,4),(3,4);
+-- admin -> 管理端，user01 -> 用户端。一个账号一行，admin 只挂 SUPER_ADMIN。
+-- 它曾经同时挂着 USER，为的是用右上角的「切换角色」预览用户端。那个接口连同
+-- 「一个账号可以有多个角色」一起删了，这一行于是没有任何读者：登录只看有没有
+-- SUPER_ADMIN，多出来的 USER 既不改变进哪个端，也不放开任何东西。
+-- 已有的库由 migrate-2026-09-05-two-sides.sql 删掉这类多余的行，两种装法的
+-- admin 因此行为一致。
+INSERT INTO `user_roles_role` VALUES (1,1),(3,4);
