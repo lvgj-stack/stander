@@ -41,6 +41,11 @@ agent 连上控制面之后，同一行变成「在线」。
 「—」。没有一律写成 `unregistered`：那些节点里有一部分 agent 正跑着，只是从来没人记录
 过，把它们说成「未注册」和继续显示 8123 一样是编造。
 
-**欠着一步：** `internal/model/entity/nodes.gen.go` 上还写着 `default:8123`。按
-`docs/development.md` 的三步走，产物只能重新生成、不能手改，而重新生成要一个已经执行
-过迁移的库。这一步记在迁移脚本末尾。眼下没有实际影响——两个写入方都显式写这一列。
+**曾经欠着一步，现在补上了：** `internal/model/entity/nodes.gen.go` 上还写着
+`default:8123`——按 `docs/development.md` 的三步走，产物只能重新生成、不能手改，而重新
+生成要一个已经执行过迁移的库。做票 04 时发现这台机器上就有跑着的 MySQL（docker，
+13306），于是把迁移在开发库上执行了一遍再跑 `stander gen`，那个默认值已经从产物里消失。
+见 `worktree-prefer-ipv6` 上的 `92ee8ed`。
+
+那次重新生成还带出两样跟这张票无关的存量漂移（四个实体上抄错的索引名、dal 是老版本
+gorm-gen 的产物），一并在那个提交里，单独拆开以免混进功能 diff。
