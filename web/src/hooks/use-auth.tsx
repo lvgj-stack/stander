@@ -4,17 +4,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import * as authApi from '@/api/auth'
 import { clearToken, getToken, setToken, setUnauthorizedHandler } from '@/api/client'
 import { getCurrentUser } from '@/api/user'
+import { ADMIN_ROLE } from '@/lib/roles'
 import type { CurrentUser } from '@/types/api'
-
-/**
- * The role that puts an account on the admin side.
- *
- * It is the same constant the Go service layer splits on
- * (identity.RoleSuperAdmin), and deliberately the only one: the backend has
- * exactly one authorization boundary — super admin or not — so the console has
- * exactly two sides rather than a menu assembled per role at runtime.
- */
-export const ADMIN_ROLE = 'SUPER_ADMIN'
 
 interface AuthState {
   token: string | null
@@ -29,7 +20,6 @@ interface AuthState {
   retry: () => void
   login: (params: authApi.LoginParams) => Promise<void>
   logout: () => Promise<void>
-  switchRole: (roleCode: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthState | null>(null)
@@ -75,28 +65,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     queryClient.clear()
   }, [queryClient])
 
-  const switchRole = useCallback(
-    async (roleCode: string) => {
-      const { accessToken } = await authApi.switchRole(roleCode)
-      setToken(accessToken)
-      setTokenState(accessToken)
-      await queryClient.invalidateQueries()
-    },
-    [queryClient],
-  )
-
-  // The *active* role decides the side, and only it — deliberately no fallback
-  // to the roles the account merely holds.
-  //
-  // The backend reads the same single value: identity.Principal.RoleCode is
-  // the JWT's currentRoleCode and nothing else. A token whose role no longer
-  // resolves (it was renamed, or deleted — the two-sides migration drops
-  // ROLE_QA) leaves `currentRole` null, and the backend scopes that caller as
-  // a non-admin. Routing them to the admin side on the strength of a role
-  // they hold but are not currently acting as would show them admin screens
-  // that every API call then answers as empty — data loss, not a stale token.
+  // `role` is the role the token carries, which is the only thing the backend
+  // authorizes on (identity.Principal.RoleCode is the JWT's currentRoleCode and
+  // nothing else). Anything the backend does not recognise it already reports
+  // as USER, so there is no third case to handle here.
   const user = userQuery.data
-  const isAdmin = useMemo(() => user?.currentRole?.code === ADMIN_ROLE, [user])
+  const isAdmin = useMemo(() => user?.role === ADMIN_ROLE, [user])
 
   const retry = useCallback(() => {
     void userQuery.refetch()
@@ -116,9 +90,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       retry,
       login,
       logout,
-      switchRole,
     }),
-    [token, user, isAdmin, userQuery.isPending, userQuery.error, retry, login, logout, switchRole],
+    [token, user, isAdmin, userQuery.isPending, userQuery.error, retry, login, logout],
   )
 
   return <AuthContext value={value}>{children}</AuthContext>

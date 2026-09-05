@@ -12,6 +12,11 @@
  * file holds only what comes back.
  */
 
+// The two role codes are UI constants, not a wire shape — see lib/roles.
+import type { RoleCode } from '@/lib/roles'
+
+export type { RoleCode }
+
 /**
  * The envelope every JSON endpoint wraps its payload in.
  *
@@ -195,13 +200,6 @@ export interface RuleTestResult {
 
 // ------------------------------------------------------------- accounts
 
-export interface Role {
-  id: number
-  code: string
-  name: string
-  enable: boolean
-}
-
 export interface Profile {
   id: number
   gender: number
@@ -221,8 +219,13 @@ export interface CurrentUser {
   createTime: string
   updateTime: string
   profile: Profile | null
-  roles: Role[] | null
-  currentRole: Role | null
+  /**
+   * The role the *token* carries, which is the one the backend authorizes on.
+   * Not the one stored against the account: an account demoted while signed in
+   * keeps an admin token until it expires, and the console has to follow what
+   * the API will actually allow.
+   */
+  role: RoleCode
 }
 
 export interface AdminUser {
@@ -235,5 +238,5 @@ export interface AdminUser {
   avatar: string
   address: string
   email: string
-  roles: Role[] | null
+  role: RoleCode
 }

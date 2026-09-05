@@ -10,8 +10,33 @@ package identity
 
 import "context"
 
-// RoleSuperAdmin bypasses every per-resource permission check.
-const RoleSuperAdmin = "SUPER_ADMIN"
+// The two roles this product has.
+//
+// RoleSuperAdmin bypasses every per-resource permission check and lands on the
+// admin console; RoleUser lands on the user portal. There is no third one and
+// no way to add one: a role decides which side of the console an account gets
+// and nothing else, and the whole authorization boundary is IsSuperAdmin.
+// Finer-grained visibility is granted per user in user_role_node_mappings /
+// user_role_chain_mappings, not by inventing a role.
+const (
+	RoleSuperAdmin = "SUPER_ADMIN"
+	RoleUser       = "USER"
+)
+
+// NormalizeRole collapses a stored role code onto one of the two.
+//
+// The `role` table is older than this rule and can still hold rows the product
+// no longer has (the two-sides migration deletes ROLE_QA, but a database that
+// was never migrated keeps it). Everything but SUPER_ADMIN already authorizes
+// exactly like USER — IsSuperAdmin is the only check — so reporting those
+// accounts as USER tells the truth about what they can do rather than echoing
+// a code the console has no screen for.
+func NormalizeRole(code string) string {
+	if code == RoleSuperAdmin {
+		return RoleSuperAdmin
+	}
+	return RoleUser
+}
 
 // Principal is who is making the current call.
 //

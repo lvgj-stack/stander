@@ -39,13 +39,12 @@ func (user) Detail(c context.Context, ctx *app.RequestContext) {
 	data := inout.NewUserDetailRes(&u)
 
 	db.Dao.Model(model.Profile{}).Where("userId=?", uid).Find(&data.Profile)
-	uroleIdList := db.Dao.Model(model.UserRolesRole{}).Where("userId=?", uid).Select("roleId")
-	db.Dao.Model(model.Role{}).Where("id IN (?)", uroleIdList).Find(&data.Roles)
-	for _, r := range data.Roles {
-		if r.Code == claim.CurrentRoleCode {
-			data.CurrentRole = r
-		}
-	}
+	// The token's role, not the stored one. The backend authorizes on exactly
+	// this value — the middleware copies it into identity.Principal — so it is
+	// what the console must route on. An account demoted while signed in keeps
+	// an admin-looking token until it expires; routing it to the admin side
+	// would hand it screens that every API call then answers as empty.
+	data.Role = identity.NormalizeRole(claim.CurrentRoleCode)
 	Resp.Succ(ctx, data)
 }
 
@@ -76,10 +75,6 @@ func (user) List(c context.Context, ctx *app.RequestContext) {
 	for _, datum := range profileList {
 		var uinfo entity.User
 		db.Dao.Model(&entity.User{}).Where("ID = ?", datum.UserId).First(&uinfo)
-		var rols []*model.Role
-		db.Dao.Model(model.Role{}).
-			Where("id IN (?)", db.Dao.Model(model.UserRolesRole{}).Where("userId=?", datum.UserId).Select("roleId")).
-			Find(&rols)
 		data.PageData = append(data.PageData, inout.UserListItem{
 			ID:         int(deref(uinfo.ID)),
 			Username:   deref(uinfo.Username),
@@ -90,7 +85,7 @@ func (user) List(c context.Context, ctx *app.RequestContext) {
 			Avatar:     datum.Avatar,
 			Address:    datum.Address,
 			Email:      datum.Email,
-			Roles:      rols,
+			Role:       roleOf(datum.UserId),
 		})
 	}
 	Resp.Succ(ctx, data)
@@ -157,14 +152,20 @@ func (user) Update(c context.Context, ctx *app.RequestContext) {
 		orm.Update("username", *params.Username)
 		db.Dao.Model(model.Profile{}).Where("userId=?", params.Id).Update("nickName", *params.Username)
 	}
-	if params.RoleIds != nil {
-		db.Dao.Where("userId=?", params.Id).Delete(model.UserRolesRole{})
-		for _, roleId := range *params.RoleIds {
-			db.Dao.Model(model.UserRolesRole{}).Create(&model.UserRolesRole{
-				UserId: params.Id,
-				RoleId: roleId,
-			})
+	if params.Role != nil {
+		roleID, err := roleIDFor(db.Dao, *params.Role)
+		if err != nil {
+			Resp.Fail(c, ctx, err)
+			return
 		}
+		// Replaced rather than added to: an account has one role, so a leftover
+		// row from a database that predates that rule would otherwise keep an
+		// account on the admin side after it was moved off it.
+		db.Dao.Where("userId=?", params.Id).Delete(model.UserRolesRole{})
+		db.Dao.Model(model.UserRolesRole{}).Create(&model.UserRolesRole{
+			UserId: params.Id,
+			RoleId: roleID,
+		})
 	}
 	Resp.Succ(ctx, nil)
 }
@@ -250,13 +251,15 @@ func (user) Add(c context.Context, ctx *app.RequestContext) {
 		}).Error; err != nil {
 			return err
 		}
-		for _, roleId := range params.RoleIds {
-			if err := tx.Create(&model.UserRolesRole{
-				UserId: int(newID),
-				RoleId: roleId,
-			}).Error; err != nil {
-				return err
-			}
+		roleID, err := roleIDFor(tx, params.Role)
+		if err != nil {
+			return err
+		}
+		if err := tx.Create(&model.UserRolesRole{
+			UserId: int(newID),
+			RoleId: roleID,
+		}).Error; err != nil {
+			return err
 		}
 		return nil
 	})
@@ -283,4 +286,18 @@ func (user) Delete(c context.Context, ctx *app.RequestContext) {
 		return
 	}
 	Resp.Succ(ctx, "")
+}
+
+// roleIDFor resolves one of the two role codes to the id this database uses.
+//
+// The ids are not fixed. sql/init.sql seeds SUPER_ADMIN as 1 and USER as 4,
+// but a database grown out of the naive-admin template may number them
+// differently — which is why the code is the identifier everywhere above the
+// join table, and the id is looked up here rather than written down.
+func roleIDFor(tx *gorm.DB, code string) (int, error) {
+	var role model.Role
+	if err := tx.Model(model.Role{}).Where("code = ?", code).First(&role).Error; err != nil {
+		return 0, fmt.Errorf("数据库里没有 %s 角色，先执行 sql/init.sql: %w", code, err)
+	}
+	return role.ID, nil
 }

@@ -105,10 +105,6 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
 
 ### 用户-详情 get : /api/user/detail
 
-`currentRole.code` 决定登录后进哪个端：`SUPER_ADMIN` 进管理端，其余（包括
-`currentRole` 为 null）进用户端。前后端读的是同一个值——后端的
-`identity.Principal.RoleCode` 就是 JWT 里的 `currentRoleCode`。
-
 **request**
 
 -
@@ -134,37 +130,41 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
             "UserId":1,
             "NickName":"444"
         },
-        "roles":[
-            {
-                "id":1,
-                "code":"SUPER_ADMIN",
-                "name":"超级管理员",
-                "enable":true
-            }
-        ],
-        "currentRole":{
-            "id":1,
-            "code":"SUPER_ADMIN",
-            "name":"超级管理员",
-            "enable":true
-        }
+        "role":"SUPER_ADMIN"
     },
     "originUrl":"/user/detail"
 }
 ```
 
+`role` 只有 `SUPER_ADMIN` 和 `USER` 两个值，决定登录后进哪个端。
+
+它取自 **token** 里的角色，不是库里存的那个——后端鉴权读的就是这一个值
+（`identity.Principal.RoleCode` 即 JWT 的 `currentRoleCode`），前端必须跟着它
+走：一个人在登录期间被降权，手里的 token 到期前仍然是管理员，按库里的值把他
+送去用户端，他反而会看到一堆调不动的接口。库里存着其他角色（没迁移过的老库还
+留着 `ROLE_QA`）时一律按 `USER` 返回，因为它们本来就和 `USER` 权限一致。
+
 
 ### 已删除的接口
 
-`/role/permissions/tree`、`/role/page`、角色的增删改、给角色分配用户，以及
-整组 `/permission/*`，都随动态菜单一起删了。
+整组 `/permission/*`、`/role/*`（含 `GET /role`）、以及
+`POST /auth/current-role/switch/:role`，都没了。
 
 前端曾经把 `permission` 表当菜单树读：每行带 `path`、`component`、`icon`、
 `order`，登录后拉回来在运行时建路由和 tab。现在两个端（用户端 `/portal/*`、
 管理端 `/admin/*`）的路由都写死在前端代码里，角色只剩一个作用：决定登录后
-进哪个端。`GET /role` 保留，账号表单用它把 SUPER_ADMIN / USER 解析成角色 id。
+进哪个端。
 
-已有的库用 `sql/migrate-2026-09-05-two-sides.sql` 清理这两张表。
+角色只有 `SUPER_ADMIN` 和 `USER` 两个，一个账号一个。于是：
+
+- **`GET /role` 没了**。它存在是为了让账号表单把 code 翻译成本库的角色 id；
+  现在表单直接发 code（`"role":"SUPER_ADMIN"`），翻译在服务端做。
+- **切换角色没了**。一个账号只有一个角色，没有可切的对象。这个接口原本会拿
+  路径里的角色名重新签一个 token，而中间件把它直接抄进 `identity.Principal`
+  ——少一个必须写对的校验，比写对它更省心。
+
+已有的库用 `sql/migrate-2026-09-05-two-sides.sql` 清理 permission 两张表。
+`role` / `user_roles_role` 两张表还在用，它们是"这个账号属于哪个端"的存储。
 
 ### 用户-列表 get : /api/user  **仅管理员**
 
@@ -197,14 +197,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
                 "avatar":"https://wpimg.wallstcn.com/f778738c-e4f8-4870-b634-56703b4acafe.gif?imageView2/1/w/80/h/80",
                 "address":"444",
                 "email":"",
-                "roles":[
-                    {
-                        "id":1,
-                        "code":"SUPER_ADMIN",
-                        "name":"超级管理员",
-                        "enable":true
-                    }
-                ]
+                "role":"SUPER_ADMIN"
             },
             {
                 "id":13,
@@ -216,7 +209,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
                 "avatar":"",
                 "address":"",
                 "email":"",
-                "roles":[]
+                "role":"USER"
             },
             {
                 "id":14,
@@ -228,47 +221,17 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
                 "avatar":"",
                 "address":"",
                 "email":"",
-                "roles":[
-                    {
-                        "id":1,
-                        "code":"SUPER_ADMIN",
-                        "name":"超级管理员",
-                        "enable":true
-                    },
-                    {
-                        "id":5,
-                        "code":"erser",
-                        "name":"jkjn",
-                        "enable":false
-                    }
-                ]
-            },
-            {
-                "id":15,
-                "username":"cccc22",
-                "enable":true,
-                "createTime":"2024-01-08T17:05:26.175886+08:00",
-                "updateTime":"2024-01-08T17:05:26.175886+08:00",
-                "gender":0,
-                "avatar":"",
-                "address":"",
-                "email":"",
-                "roles":[
-                    {
-                        "id":3,
-                        "code":"lkjlkj",
-                        "name":"iiii",
-                        "enable":true
-                    }
-                ]
+                "role":"SUPER_ADMIN"
             }
         ],
-        "total":0
+        "total":3
     },
     "originUrl":"/user"
 }
 ```
 
+每行一个 `role`，只会是 `SUPER_ADMIN` 或 `USER`——库里存着别的角色（老库的
+`ROLE_QA`）也按 `USER` 返回。
 
 ### 用户管理-状态停用/启用 patch : /api/user/:id  **仅管理员**
 
@@ -300,9 +263,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
     "enable":true//可传，默认true
     "username":"x", //必传
     "password":"x",//必传
-    "roleIds":[
-        6
-    ]
+    "role":"USER" //必传，SUPER_ADMIN 或 USER
 }
 ```
 
@@ -318,9 +279,12 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
 
 ### 用户管理-分配所属端 patch : /api/user/:id  **仅管理员**
 
-`roleIds` 决定账号登录后进哪个端。控制台只发一个 id：`SUPER_ADMIN` 进管理端，
-`USER` 进用户端。接口本身仍接受多个 id，但多个角色只会让"进哪个端"取决于哪个
-角色排在前面，没有别的效果。
+`role` 决定账号登录后进哪个端：`SUPER_ADMIN` 进管理端，`USER` 进用户端，只接受
+这两个值。发的是 code 不是 id——库里的角色 id 不固定（`sql/init.sql` 给的是 1 和
+4，从模板长出来的老库未必），服务端按 code 查出 id 再写 `user_roles_role`。
+
+写的时候整行替换：一个账号一个角色，老库里遗留的多余行会一并清掉，否则把某人
+移出管理端之后他还留在管理端。
 
 **request**
 
@@ -328,9 +292,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
 {
     "id":14, //必传-用户id
     "username":"eeeee",
-    "roleIds":[
-        4
-    ] //角色id数组，控制台只发一个
+    "role":"USER"
 }
 ```
 
@@ -426,34 +388,6 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
     "message":"OK",
     "data":true,
     "originUrl":"/auth/password"
-}
-```
-
-###  角色列表  get : /api/role  **仅管理员**
-
-只剩这一个角色接口。账号表单用它把 `SUPER_ADMIN` / `USER` 解析成本库里的角色 id，
-再通过 `PATCH /api/user/:id` 的 `roleIds` 决定这个账号进哪个端。
-
-**response**
-```
-{
-    "code":0,
-    "message":"OK",
-    "data":[
-        {
-            "id":1,
-            "code":"SUPER_ADMIN",
-            "name":"超级管理员",
-            "enable":true
-        },
-        {
-            "id":4,
-            "code":"USER",
-            "name":"普通用户",
-            "enable":true
-        }
-    ],
-    "originUrl":"/role"
 }
 ```
 

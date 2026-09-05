@@ -25,6 +25,24 @@ func TestAbsentPrincipalIsZero(t *testing.T) {
 	}
 }
 
+// Everything that is not SUPER_ADMIN already authorizes exactly like USER, so
+// a leftover role from a database that predates the two-role rule has to
+// report as USER rather than as itself — the console has no third side to send
+// it to, and IsSuperAdmin is the only check there is.
+func TestNormalizeRole(t *testing.T) {
+	for code, want := range map[string]string{
+		RoleSuperAdmin: RoleSuperAdmin,
+		RoleUser:       RoleUser,
+		"ROLE_QA":      RoleUser,
+		"":             RoleUser,
+		"super_admin":  RoleUser, // codes are compared exactly
+	} {
+		if got := NormalizeRole(code); got != want {
+			t.Errorf("NormalizeRole(%q) = %q, want %q", code, got, want)
+		}
+	}
+}
+
 func TestIsSuperAdmin(t *testing.T) {
 	tests := []struct {
 		role string

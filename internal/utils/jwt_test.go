@@ -1,6 +1,9 @@
 package utils
 
 import (
+	"encoding/base64"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,7 +13,7 @@ import (
 func TestTokenRoundTrip(t *testing.T) {
 	SetJWTSigningKey("test-signing-key")
 
-	token := GenerateToken(7, 7, "admin", "SUPER_ADMIN", []string{"SUPER_ADMIN", "USER"})
+	token := GenerateToken(7, 7, "admin", "SUPER_ADMIN")
 	claims, err := NewJWT().ParseToken(token)
 	if err != nil {
 		t.Fatalf("ParseToken: %v", err)
@@ -24,8 +27,34 @@ func TestTokenRoundTrip(t *testing.T) {
 	if claims.CurrentRoleCode != "SUPER_ADMIN" {
 		t.Errorf("current role: got %q, want SUPER_ADMIN", claims.CurrentRoleCode)
 	}
-	if len(claims.RoleCodes) != 2 {
-		t.Errorf("role codes: got %v, want two entries", claims.RoleCodes)
+}
+
+// The claim keeps its `currentRoleCode` name across the drop of the roleCodes
+// array. Renaming it would leave every already-issued token resolving to no
+// role — which the backend reads as a non-admin, silently demoting every
+// signed-in administrator until their token expired.
+func TestTokenClaimNameIsStable(t *testing.T) {
+	SetJWTSigningKey("test-signing-key")
+
+	payload := GenerateToken(7, 7, "admin", "SUPER_ADMIN")
+	parts := strings.Split(payload, ".")
+	if len(parts) != 3 {
+		t.Fatalf("not a JWT: %q", payload)
+	}
+	body, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+
+	var claims map[string]any
+	if err := json.Unmarshal(body, &claims); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+	if claims["currentRoleCode"] != "SUPER_ADMIN" {
+		t.Errorf("currentRoleCode claim: got %v, want SUPER_ADMIN", claims["currentRoleCode"])
+	}
+	if _, ok := claims["roleCodes"]; ok {
+		t.Error("roleCodes is gone: an account has one role")
 	}
 }
 
@@ -33,7 +62,7 @@ func TestTokenRoundTrip(t *testing.T) {
 // silently invalidate tokens already in the wild.
 func TestSetJWTSigningKeyIgnoresEmpty(t *testing.T) {
 	SetJWTSigningKey("original-key")
-	token := GenerateToken(1, 1, "u", "USER", nil)
+	token := GenerateToken(1, 1, "u", "USER")
 
 	SetJWTSigningKey("")
 	if _, err := NewJWT().ParseToken(token); err != nil {
@@ -43,7 +72,7 @@ func TestSetJWTSigningKeyIgnoresEmpty(t *testing.T) {
 
 func TestParseTokenRejectsAnotherKey(t *testing.T) {
 	SetJWTSigningKey("key-a")
-	token := GenerateToken(1, 1, "u", "USER", nil)
+	token := GenerateToken(1, 1, "u", "USER")
 
 	SetJWTSigningKey("key-b")
 	if _, err := NewJWT().ParseToken(token); err == nil {

@@ -93,10 +93,7 @@ function renderAt(path: string) {
   return router
 }
 
-const SUPER_ADMIN = { id: 1, code: 'SUPER_ADMIN', name: '超级管理员', enable: true }
-const USER = { id: 4, code: 'USER', name: '普通用户', enable: true }
-
-/** Signs in as an account whose active role is `currentRole`. */
+/** Signs in as an account whose token carries `role`. */
 function signInAs(data: unknown) {
   setToken('jwt')
   vi.stubGlobal(
@@ -108,9 +105,8 @@ function signInAs(data: unknown) {
   )
 }
 
-const asAdmin = () =>
-  signInAs({ id: 1, username: 'admin', roles: [SUPER_ADMIN], currentRole: SUPER_ADMIN })
-const asUser = () => signInAs({ id: 3, username: 'user01', roles: [USER], currentRole: USER })
+const asAdmin = () => signInAs({ id: 1, username: 'admin', role: 'SUPER_ADMIN' })
+const asUser = () => signInAs({ id: 3, username: 'user01', role: 'USER' })
 
 /**
  * Waits for the page a navigation settles on, then reports where it landed.

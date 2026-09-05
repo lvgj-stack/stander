@@ -16,6 +16,7 @@ import (
 	"github.com/lvgj-stack/stander/internal/admin/model"
 	"github.com/lvgj-stack/stander/internal/apperr"
 	"github.com/lvgj-stack/stander/internal/db"
+	"github.com/lvgj-stack/stander/internal/identity"
 	"github.com/lvgj-stack/stander/internal/model/entity"
 	"github.com/lvgj-stack/stander/internal/utils"
 )
@@ -79,21 +80,30 @@ func (auth) Login(c context.Context, ctx *app.RequestContext) {
 	}
 	userID := int(*info.ID)
 
-	var roleIds, roleNames []string
-	db.Dao.Model(model.UserRolesRole{}).
-		Where("userId = ?", userID).
-		Select("roleId").Find(&roleIds)
-	db.Dao.Model(model.Role{}).
-		Where("id in (?)", roleIds).Order("id asc").
-		Select("code").Find(&roleNames)
-
-	currentRole := ""
-	if len(roleNames) > 0 {
-		currentRole = roleNames[0]
-	}
 	Resp.Succ(ctx, inout.LoginRes{
-		AccessToken: utils.GenerateToken(userID, userID, deref(info.Username), currentRole, roleNames),
+		AccessToken: utils.GenerateToken(userID, userID, deref(info.Username), roleOf(userID)),
 	})
+}
+
+// roleOf reads the account's role.
+//
+// The join table can hold more than one row per account — it is old enough to
+// predate the two-role rule — so an account that still carries SUPER_ADMIN
+// alongside anything else is an administrator. Everything else, including an
+// account with no role row at all, is a plain user: that is exactly what
+// IsSuperAdmin decides downstream, so resolving it here keeps the token
+// honest about what the caller will actually be allowed to do.
+func roleOf(userID int) string {
+	var codes []string
+	db.Dao.Model(model.Role{}).
+		Where("id IN (?)", db.Dao.Model(model.UserRolesRole{}).
+			Where("userId = ?", userID).Select("roleId")).
+		Select("code").Find(&codes)
+
+	if slices.Contains(codes, identity.RoleSuperAdmin) {
+		return identity.RoleSuperAdmin
+	}
+	return identity.RoleUser
 }
 
 func (auth) Password(c context.Context, ctx *app.RequestContext) {
@@ -123,29 +133,4 @@ func (auth) Password(c context.Context, ctx *app.RequestContext) {
 
 func (auth) Logout(c context.Context, ctx *app.RequestContext) {
 	Resp.Succ(ctx, true)
-}
-
-// SwitchRole mints a token carrying a different one of the caller's roles.
-//
-// The requested role must be one the account actually holds. It used to be
-// taken from the path and signed as-is, so anyone with a token could ask for
-// SUPER_ADMIN and get one: the middleware copies CurrentRoleCode straight into
-// identity.Principal, and IsSuperAdmin() is the single authorization boundary
-// the whole service layer — and the console's two sides — rest on.
-func (auth) SwitchRole(c context.Context, ctx *app.RequestContext) {
-	roleName := ctx.Param("role")
-	jwtToken, _ := ctx.Get("jwt_token")
-	claim, ok := jwtToken.(*utils.CustomClaims)
-	if !ok {
-		Resp.Fail(c, ctx, apperr.Unauthorizedf("无效的登录态"))
-		return
-	}
-	if !slices.Contains(claim.RoleCodes, roleName) {
-		Resp.Fail(c, ctx, apperr.Forbiddenf("没有这个角色"))
-		return
-	}
-	claim.CurrentRoleCode = roleName
-	Resp.Succ(ctx, inout.LoginRes{
-		AccessToken: utils.GenerateToken(claim.UID, claim.UID, claim.Username, roleName, claim.RoleCodes),
-	})
 }

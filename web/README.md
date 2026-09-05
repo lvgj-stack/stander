@@ -8,9 +8,9 @@ React + TypeScript + [shadcn/ui](https://ui.shadcn.com)，构建成静态站点�
 | 端 | 路径 | 谁进得来 |
 |---|---|---|
 | 管理端 | `/admin/*` | `SUPER_ADMIN` |
-| 用户端 | `/portal/*` | 其余所有角色 |
+| 用户端 | `/portal/*` | `USER` |
 
-登录后 `/` 按角色重定向到其中一个。详见下面的「两个端」。
+登录后 `/` 按角色重定向到其中一个。角色只有这两个，详见下面的「两个端」。
 
 ## 开发
 
@@ -21,7 +21,7 @@ cp .env.example .env      # 可选，默认就指向 127.0.0.1:8123
 pnpm dev                  # http://localhost:5173
 ```
 
-需要 Node 24（见 `.nvmrc`）。开发时 vite 把 `/auth`、`/user`、`/role`、
+需要 Node 24（见 `.nvmrc`）。开发时 vite 把 `/auth`、`/user`、
 `/stander` 转发到 `VITE_DEV_PROXY_TARGET`（默认 `http://127.0.0.1:8123`），
 所以前后端同源，验证码的 session cookie 能正常带上。
 
@@ -118,14 +118,15 @@ camelCase 查询参数。`api/client.ts` 的 `action()` 和 `api.get/post/...` �
 - `src/routes/index.tsx`——`/login`、`/admin/*`、`/portal/*`，以及 `/` 的分流
 - `src/app/admin/admin-nav.tsx`、`src/app/user/user-nav.tsx`——两个端各自的菜单
 
-分端只看一件事：`useAuth().isAdmin`，也就是 `currentRole.code` 是不是
-`SUPER_ADMIN`。这跟后端唯一的那条授权边界（`identity.Principal.IsSuperAdmin()`）
-是同一条线，所以两个端既不多也不少。
+分端只看一件事：`useAuth().isAdmin`，也就是 `user.role` 是不是 `SUPER_ADMIN`。
+这跟后端唯一的那条授权边界（`identity.Principal.IsSuperAdmin()`）是同一条线，
+所以两个端既不多也不少。
 
-**只看当前角色，不看账号持有的角色列表**——后端读的也正是 JWT 里那一个
-`currentRoleCode`。如果这里加个"持有 SUPER_ADMIN 就算管理员"的兜底，一个角色已
-经失效的 token 会被送进管理端，而每个接口都按普通用户裁剪，页面全是空的，看起来
-像数据丢了。
+`user.role` 是 **token 里**那个角色，不是库里存的那个——后端读的也正是 JWT 的
+`currentRoleCode`。一个人在登录期间被移出管理端，手里的 token 到期前后端仍按管理
+员放行；这里要是改成读库，他会被送进用户端，反而看到一堆本来能用却调不出结果的
+页面。角色只有 `SUPER_ADMIN` 和 `USER` 两个（`src/lib/roles.ts`），后端把别的值
+都归一成 `USER` 之后才发出来。
 
 `RequireSide` 只负责把人送到属于他的那一边，它是路由便利，不是安全边界：两个端
 由同一套 API 提供服务，用户端账号的 token 对每条路由都合法。真正拦住越权的在后端

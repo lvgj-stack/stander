@@ -23,9 +23,11 @@ type UserDetailRes struct {
 	CreateTime time.Time `json:"createTime"`
 	UpdateTime time.Time `json:"updateTime"`
 
-	Profile     *model.Profile `json:"profile" gorm:"-"`
-	Roles       []*model.Role  `json:"roles" gorm:"-"`
-	CurrentRole *model.Role    `json:"currentRole" gorm:"-"`
+	Profile *model.Profile `json:"profile" gorm:"-"`
+	// Role is one of identity.RoleSuperAdmin / identity.RoleUser. It used to be
+	// a `roles` array plus a `currentRole` object, which only ever differed
+	// while an account could hold several roles and switch between them.
+	Role string `json:"role" gorm:"-"`
 }
 
 // NewUserDetailRes maps the gorm-gen entity onto the response shape the admin
@@ -57,19 +59,17 @@ func NewUserDetailRes(u *entity.User) *UserDetailRes {
 	return r
 }
 
-type RoleListRes []*model.Role
-
 type UserListItem struct {
-	ID         int           `json:"id"`
-	Username   string        `json:"username"`
-	Enable     bool          `json:"enable"`
-	CreateTime time.Time     `json:"createTime"`
-	UpdateTime time.Time     `json:"updateTime"`
-	Gender     int           `json:"gender"`
-	Avatar     string        `json:"avatar"`
-	Address    string        `json:"address"`
-	Email      string        `json:"email"`
-	Roles      []*model.Role `json:"roles"`
+	ID         int       `json:"id"`
+	Username   string    `json:"username"`
+	Enable     bool      `json:"enable"`
+	CreateTime time.Time `json:"createTime"`
+	UpdateTime time.Time `json:"updateTime"`
+	Gender     int       `json:"gender"`
+	Avatar     string    `json:"avatar"`
+	Address    string    `json:"address"`
+	Email      string    `json:"email"`
+	Role       string    `json:"role"`
 }
 type UserListRes struct {
 	PageData []UserListItem `json:"pageData"`
