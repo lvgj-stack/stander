@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
-	"github.com/hertz-contrib/logger/accesslog"
 
 	"github.com/lvgj-stack/stander/api"
 	"github.com/lvgj-stack/stander/internal/config"
@@ -19,7 +18,11 @@ func newHertz(c *config.Config) *hertzServer {
 	h := server.Default(
 		server.WithHostPorts(":" + c.Server.Port),
 	)
-	h.Use(accesslog.New(accesslog.WithTimeZoneLocation(time.Local)))
+	// RequestID first: everything after it — the access log, the metrics
+	// middleware, every handler and every error envelope — reads the id it
+	// puts on the context.
+	h.Use(api.RequestID())
+	h.Use(api.AccessLog())
 	h.Use(api.Metrics())
 	api.RegisterMetrics(h)
 	return h

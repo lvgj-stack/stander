@@ -3,6 +3,7 @@ import { Loader2Icon, ServerCrashIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/use-auth'
+import { errorRequestId, errorTitle } from '@/lib/errors'
 
 /**
  * Blocks the app shell until there is a usable session.
@@ -45,7 +46,14 @@ export function RequireAuth() {
         <ServerCrashIcon className="size-8 text-muted-foreground" />
         <div className="space-y-1">
           <p className="font-medium">无法加载登录信息</p>
-          <p className="max-w-sm text-sm text-muted-foreground">{error.message}</p>
+          <p className="max-w-sm text-sm text-muted-foreground">{errorTitle(error)}</p>
+          {/* Always shown here: this screen is a dead end, so the id is the
+              only thing the user can pass on. */}
+          {errorRequestId(error) && (
+            <p className="tabular text-xs text-muted-foreground">
+              日志 ID：{errorRequestId(error)}
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
           <Button onClick={retry}>重试</Button>

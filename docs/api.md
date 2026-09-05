@@ -5,6 +5,29 @@
 ## api 接口
 
 #### 统一返回格式
+
+每个响应都带 `requestId`，同一个值也在 `X-Request-Id` 响应头里，拿它去服务端日志
+里搜 `request_id=<id>` 能找到对应的请求。请求里带 `X-Request-Id` 的话会被沿用
+（格式不合规的会被换掉）。
+
+失败时 `code` 是分类，`error` 是稳定的机器可读名字——要分支判断请用 `error`，
+`message` 是给人看的中文，随时可能改措辞：
+
+| code | error | 含义 |
+|---|---|---|
+| 0 | （无） | 成功 |
+| 400 | `invalid_argument` | 请求参数有误 |
+| 401 | `unauthenticated` | 没登录 / 登录态失效 |
+| 403 | `permission_denied` | 没权限（**不要**据此清登录态） |
+| 404 | `not_found` | 记录不存在 |
+| 409 | `conflict` | 和已有数据冲突 |
+| 422 | `failed_precondition` | 当前状态下做不了 |
+| 503 | `unavailable` | 依赖的服务不可用 |
+| 500 | `internal` | 服务端内部错误，把 `requestId` 报给运维 |
+
+注意 `code` 长得像 HTTP 状态码，但**不是**状态行：业务失败的 HTTP 状态仍然是 200。
+
+
 正确
 ```
 {

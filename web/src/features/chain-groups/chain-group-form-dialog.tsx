@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Loader2Icon } from 'lucide-react'
 
+import { ErrorState } from '@/components/error-state'
 import { listChains } from '@/api/chain'
 import { addChainGroup, type ChainGroupMemberInput } from '@/api/chain-group'
 import { Button } from '@/components/ui/button'
@@ -127,7 +128,7 @@ function Body({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
             {chainsQuery.isPending ? (
               <p className="p-4 text-center text-sm text-muted-foreground">加载中…</p>
             ) : chainsQuery.error ? (
-              <p className="p-4 text-center text-sm text-destructive">{chainsQuery.error.message}</p>
+              <ErrorState error={chainsQuery.error} className="p-4" compact />
             ) : !chainsQuery.data?.pageData.length ? (
               <p className="p-4 text-center text-sm text-muted-foreground">
                 还没有链路，先去链路页面创建

@@ -18,7 +18,7 @@ func (rule) Handle(c context.Context, ctx *app.RequestContext) {
 	case "ListRules":
 		res, err := call(c, ctx, service.ListRule)
 		if err != nil {
-			Resp.Err(ctx, 20001, err.Error())
+			Resp.Fail(c, ctx, err)
 			return
 		}
 		Resp.Succ(ctx, map[string]interface{}{
@@ -28,32 +28,32 @@ func (rule) Handle(c context.Context, ctx *app.RequestContext) {
 	case "AddRule":
 		res, err := call(c, ctx, service.AddRule)
 		if err != nil {
-			Resp.Err(ctx, 20001, err.Error())
+			Resp.Fail(c, ctx, err)
 			return
 		}
 		Resp.Succ(ctx, res)
 	case "DeleteRule":
 		res, err := call(c, ctx, service.DelRule)
 		if err != nil {
-			Resp.Err(ctx, 20001, err.Error())
+			Resp.Fail(c, ctx, err)
 			return
 		}
 		Resp.Succ(ctx, res)
 	case "ModifyRule":
 		res, err := call(c, ctx, service.ModifyRule)
 		if err != nil {
-			Resp.Err(ctx, 20001, err.Error())
+			Resp.Fail(c, ctx, err)
 			return
 		}
 		Resp.Succ(ctx, res)
 	case "TestRule":
 		res, err := call(c, ctx, service.TestRule)
 		if err != nil {
-			Resp.Err(ctx, 20001, err.Error())
+			Resp.Fail(c, ctx, err)
 			return
 		}
 		Resp.Succ(ctx, res)
 	default:
-		unknownAction(ctx, action)
+		unknownAction(c, ctx, action)
 	}
 }

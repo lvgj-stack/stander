@@ -12,14 +12,44 @@
  * file holds only what comes back.
  */
 
-/** The envelope every JSON endpoint wraps its payload in. */
+/**
+ * The envelope every JSON endpoint wraps its payload in.
+ *
+ * `code` is 0 on success and otherwise the classification
+ * (`internal/apperr`): 400 invalid argument, 401 unauthenticated,
+ * 403 permission denied, 404 not found, 409 conflict, 422 failed
+ * precondition, 503 unavailable, 500 internal. They read like HTTP statuses
+ * but they are envelope codes — the status line stays 200 for a business
+ * failure, which is why success can only be read off `code`.
+ */
 export interface ApiEnvelope<T> {
   code: number
   message: string
   data?: T
-  error?: string
+  /**
+   * The stable machine-readable classification (`permission_denied`,
+   * `conflict`, …), absent on success. Branch on this, never on `message`,
+   * which is prose for a person and may be reworded.
+   */
+  error?: ErrorKind
+  /**
+   * Identifies this request in the server logs. Present on every response,
+   * and repeated in the `X-Request-Id` header.
+   */
+  requestId?: string
   originUrl: string
 }
+
+/** The classifications the backend sends as `error`. Mirrors apperr.Kind.Slug(). */
+export type ErrorKind =
+  | 'internal'
+  | 'invalid_argument'
+  | 'unauthenticated'
+  | 'permission_denied'
+  | 'not_found'
+  | 'conflict'
+  | 'failed_precondition'
+  | 'unavailable'
 
 /** A page of rows, as the admin list endpoints return them. */
 export interface Page<T> {

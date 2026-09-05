@@ -2,8 +2,8 @@ package service
 
 import (
 	"context"
-	"errors"
 
+	"github.com/lvgj-stack/stander/internal/apperr"
 	"github.com/lvgj-stack/stander/internal/identity"
 	"github.com/lvgj-stack/stander/internal/model/dal"
 	"github.com/lvgj-stack/stander/internal/model/entity"
@@ -12,7 +12,7 @@ import (
 // ErrForbidden is returned when a caller asks for something only an
 // administrator may do. The handlers turn it into a business error in the
 // response envelope, like every other service error.
-var ErrForbidden = errors.New("没有权限执行该操作")
+var ErrForbidden = apperr.Forbiddenf("没有权限执行该操作")
 
 // requireSuperAdmin gates an action on the caller being an administrator.
 //

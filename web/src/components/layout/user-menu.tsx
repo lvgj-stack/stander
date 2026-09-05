@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useAuth } from '@/hooks/use-auth'
+import { errorDetail, errorTitle } from '@/lib/errors'
 
 /**
  * `home` is the side this menu is rendered on, so 个人资料 goes to that side's
@@ -58,7 +59,9 @@ export function UserMenu({ home }: { home: string }) {
                     await switchRole(role.code)
                     toast.success(`已切换到「${role.name}」`)
                   } catch (error) {
-                    toast.error(error instanceof Error ? error.message : '切换角色失败')
+                    toast.error(errorTitle(error), {
+                      description: errorDetail(error) ?? undefined,
+                    })
                   }
                 }}
               >

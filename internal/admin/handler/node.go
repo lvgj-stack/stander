@@ -22,7 +22,7 @@ func (node) Handle(c context.Context, ctx *app.RequestContext) {
 	case "ListNodes":
 		res, err := call(c, ctx, service.ListNode)
 		if err != nil {
-			Resp.Err(ctx, 20001, err.Error())
+			Resp.Fail(c, ctx, err)
 			return
 		}
 		Resp.Succ(ctx, map[string]interface{}{
@@ -32,27 +32,27 @@ func (node) Handle(c context.Context, ctx *app.RequestContext) {
 	case "AddNode":
 		res, err := call(c, ctx, service.AddNode)
 		if err != nil {
-			Resp.Err(ctx, 20001, err.Error())
+			Resp.Fail(c, ctx, err)
 			return
 		}
 		Resp.Succ(ctx, res.Key)
 	case "DeleteNode":
 		res, err := call(c, ctx, service.DelNode)
 		if err != nil {
-			Resp.Err(ctx, 20001, err.Error())
+			Resp.Fail(c, ctx, err)
 			return
 		}
 		Resp.Succ(ctx, res.ID)
 	case "EditNode":
 		if _, err := call(c, ctx, service.EditNode); err != nil {
-			Resp.Err(ctx, 20001, err.Error())
+			Resp.Fail(c, ctx, err)
 			return
 		}
 		Resp.Succ(ctx, nil)
 	case "ListNodeChainRelationShips":
 		res, err := call(c, ctx, service.ListNodeChainRelationShips)
 		if err != nil {
-			Resp.Err(ctx, 20001, err.Error())
+			Resp.Fail(c, ctx, err)
 			return
 		}
 		Resp.Succ(ctx, res.Chains)
@@ -61,23 +61,23 @@ func (node) Handle(c context.Context, ctx *app.RequestContext) {
 		// fact rather than part of the request body — see the service comment.
 		var r req.EmptyReq
 		if err := ctx.BindAndValidate(&r); err != nil {
-			Resp.Err(ctx, 20001, err.Error())
+			Resp.Fail(c, ctx, err)
 			return
 		}
 		res, err := service.GetAgentInstallInfo(c, &r, string(ctx.Request.Host()))
 		if err != nil {
-			Resp.Err(ctx, 20001, err.Error())
+			Resp.Fail(c, ctx, err)
 			return
 		}
 		Resp.Succ(ctx, res)
 	case "GetNodePermissions":
 		res, err := call(c, ctx, service.GetNodePermissions)
 		if err != nil {
-			Resp.Err(ctx, 20001, err.Error())
+			Resp.Fail(c, ctx, err)
 			return
 		}
 		Resp.Succ(ctx, res)
 	default:
-		unknownAction(ctx, action)
+		unknownAction(c, ctx, action)
 	}
 }

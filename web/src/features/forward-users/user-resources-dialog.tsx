@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Loader2Icon, ServerIcon, WaypointsIcon } from 'lucide-react'
 
+import { ErrorState } from '@/components/error-state'
 import { listChains } from '@/api/chain'
 import { getUserResources, setUserResources } from '@/api/forward-user'
 import { listNodes } from '@/api/node'
@@ -77,7 +78,7 @@ export function UserResourcesDialog({
         {loading ? (
           <p className="py-10 text-center text-sm text-muted-foreground">加载中…</p>
         ) : error ? (
-          <p className="py-10 text-center text-sm text-destructive">{error.message}</p>
+          <ErrorState error={error} className="py-10" />
         ) : ready ? (
           // Mounted with the loaded grants and keyed on the user, so the boxes
           // start ticked rather than rendering empty and being corrected — an

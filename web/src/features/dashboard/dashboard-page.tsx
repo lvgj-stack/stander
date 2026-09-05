@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ArrowRightIcon, RouteIcon, ServerIcon, UsersIcon, WaypointsIcon } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
+import { ErrorState } from '@/components/error-state'
 import { listChains } from '@/api/chain'
 import { listForwardUsers } from '@/api/forward-user'
 import { listNodes } from '@/api/node'
@@ -98,7 +99,7 @@ export function DashboardPage() {
               ))}
             </div>
           ) : topRules.error ? (
-            <p className="py-6 text-center text-sm text-destructive">{topRules.error.message}</p>
+            <ErrorState error={topRules.error} />
           ) : !topRules.data?.pageData.length ? (
             <p className="py-6 text-center text-sm text-muted-foreground">还没有流量记录</p>
           ) : (

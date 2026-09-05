@@ -13,6 +13,7 @@ import (
 
 	"github.com/lvgj-stack/stander/internal/admin/inout"
 	"github.com/lvgj-stack/stander/internal/admin/model"
+	"github.com/lvgj-stack/stander/internal/apperr"
 	"github.com/lvgj-stack/stander/internal/db"
 	"github.com/lvgj-stack/stander/internal/identity"
 	"github.com/lvgj-stack/stander/internal/model/entity"
@@ -29,7 +30,7 @@ func (user) Detail(c context.Context, ctx *app.RequestContext) {
 	jwtToken, _ := ctx.Get("jwt_token")
 	claim, ok := jwtToken.(*utils.CustomClaims)
 	if !ok {
-		Resp.Err(ctx, 401, "无效的登录态")
+		Resp.Fail(c, ctx, apperr.Unauthorizedf("无效的登录态"))
 		return
 	}
 
@@ -105,7 +106,7 @@ func (user) List(c context.Context, ctx *app.RequestContext) {
 func (user) Profile(c context.Context, ctx *app.RequestContext) {
 	var params inout.PatchProfileUserReq
 	if err := ctx.BindJSON(&params); err != nil {
-		Resp.Err(ctx, 20001, err.Error())
+		Resp.Fail(c, ctx, err)
 		return
 	}
 
@@ -114,7 +115,7 @@ func (user) Profile(c context.Context, ctx *app.RequestContext) {
 		var owner int64
 		db.Dao.Model(model.Profile{}).Where("id=? and userId=?", params.Id, uid).Count(&owner)
 		if owner == 0 {
-			Resp.Err(ctx, 403, "只能修改自己的资料")
+			Resp.Fail(c, ctx, apperr.Forbiddenf("只能修改自己的资料"))
 			return
 		}
 	}
@@ -127,7 +128,7 @@ func (user) Profile(c context.Context, ctx *app.RequestContext) {
 		Avatar:   params.Avatar,
 	}).Error
 	if err != nil {
-		Resp.Err(ctx, 20001, err.Error())
+		Resp.Fail(c, ctx, err)
 		return
 	}
 	Resp.Succ(ctx, nil)
@@ -136,7 +137,7 @@ func (user) Profile(c context.Context, ctx *app.RequestContext) {
 func (user) Update(c context.Context, ctx *app.RequestContext) {
 	var params inout.PatchUserReq
 	if err := ctx.BindJSON(&params); err != nil {
-		Resp.Err(ctx, 20001, err.Error())
+		Resp.Fail(c, ctx, err)
 		return
 	}
 	orm := db.Dao.Model(entity.User{}).Where("id=?", params.Id)
@@ -181,7 +182,7 @@ func (user) Update(c context.Context, ctx *app.RequestContext) {
 func (user) Add(c context.Context, ctx *app.RequestContext) {
 	var params inout.AddUserReq
 	if err := ctx.BindAndValidate(&params); err != nil {
-		Resp.Err(ctx, 20001, err.Error())
+		Resp.Fail(c, ctx, err)
 		return
 	}
 
@@ -194,7 +195,7 @@ func (user) Add(c context.Context, ctx *app.RequestContext) {
 			return err
 		}
 		if taken > 0 {
-			return fmt.Errorf("用户名「%s」已存在", params.Username)
+			return apperr.Conflictf("用户名「%s」已存在", params.Username)
 		}
 
 		// The `user` table has no auto_increment, so the id is picked by hand.
@@ -230,7 +231,7 @@ func (user) Add(c context.Context, ctx *app.RequestContext) {
 		if params.PlanId != 0 {
 			var plan entity.TrafficPlan
 			if err := tx.Where("id = ?", params.PlanId).First(&plan).Error; err != nil {
-				return fmt.Errorf("套餐 %d 不存在: %w", params.PlanId, err)
+				return apperr.NotFoundf("套餐 %d 不存在: %w", params.PlanId, err)
 			}
 			expiry := service.PlanPeriodEnd(now, plan.Period)
 			newUser.PlanID = int64(params.PlanId)
@@ -260,7 +261,7 @@ func (user) Add(c context.Context, ctx *app.RequestContext) {
 		return nil
 	})
 	if err != nil {
-		Resp.Err(ctx, 20001, err.Error())
+		Resp.Fail(c, ctx, err)
 		return
 	}
 	Resp.Succ(ctx, "")
@@ -278,7 +279,7 @@ func (user) Delete(c context.Context, ctx *app.RequestContext) {
 		return tx.Where("userId =?", uid).Delete(&model.Profile{}).Error
 	})
 	if err != nil {
-		Resp.Err(ctx, 20001, err.Error())
+		Resp.Fail(c, ctx, err)
 		return
 	}
 	Resp.Succ(ctx, "")

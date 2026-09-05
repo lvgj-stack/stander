@@ -7,6 +7,7 @@ import (
 
 	"gorm.io/gen"
 
+	"github.com/lvgj-stack/stander/internal/apperr"
 	"github.com/lvgj-stack/stander/internal/model/dal"
 	"github.com/lvgj-stack/stander/internal/model/entity"
 	"github.com/lvgj-stack/stander/internal/service/req"
@@ -249,12 +250,12 @@ func SetUserResources(ctx context.Context, r *req.SetUserResourcesReq) (*resp.Em
 func allExist(ctx context.Context, nodeIds, chainIds []int64) error {
 	for _, id := range nodeIds {
 		if _, err := dal.Node.WithContext(ctx).Where(dal.Node.ID.Eq(id)).First(); err != nil {
-			return fmt.Errorf("节点 %d 不存在: %w", id, err)
+			return apperr.NotFoundf("节点 %d 不存在: %w", id, err)
 		}
 	}
 	for _, id := range chainIds {
 		if _, err := dal.Chain.WithContext(ctx).Where(dal.Chain.ID.Eq(id)).First(); err != nil {
-			return fmt.Errorf("链路 %d 不存在: %w", id, err)
+			return apperr.NotFoundf("链路 %d 不存在: %w", id, err)
 		}
 	}
 	return nil

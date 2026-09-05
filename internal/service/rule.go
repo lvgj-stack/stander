@@ -12,6 +12,7 @@ import (
 	"gorm.io/gen"
 	"gorm.io/gorm"
 
+	"github.com/lvgj-stack/stander/internal/apperr"
 	"github.com/lvgj-stack/stander/internal/client"
 	"github.com/lvgj-stack/stander/internal/common"
 	"github.com/lvgj-stack/stander/internal/config"
@@ -147,7 +148,7 @@ func AddRule(ctx context.Context, req *req2.AddRuleReq) (*resp.AddRuleResp, erro
 	// node has no port or key until its agent registers. Guard rather than
 	// dereference a nil pointer into a 500.
 	if node.Port == nil || node.Key == nil {
-		return nil, errors.New("node has not registered yet")
+		return nil, apperr.FailedPreconditionf("节点还没有注册，agent 尚未连上控制面")
 	}
 	_, err = client.DoRequest(fmt.Sprintf("%s:%d", node.ManagerIP, *node.Port), "rule", "AddRule", *node.Key, req)
 	if err != nil {
@@ -163,7 +164,7 @@ func AddRule(ctx context.Context, req *req2.AddRuleReq) (*resp.AddRuleResp, erro
 		UserID:     &uid,
 	}); err != nil {
 		if strings.Contains(err.Error(), "Duplicate entry") {
-			return nil, errors.New("the specified rule already exist")
+			return nil, apperr.Conflictf("该端口上已经有转发规则了")
 		}
 		return nil, err
 	}

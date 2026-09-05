@@ -4,6 +4,7 @@ import { CopyIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { getAgentInstallInfo } from '@/api/node'
+import { ErrorState } from '@/components/error-state'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -148,9 +149,9 @@ function InstallDialogBody({ target }: { target: NodeInstallTarget }) {
               加载中…
             </p>
           ) : info.error ? (
-            <p className="rounded-md border px-3 py-6 text-center text-sm text-destructive">
-              {info.error.message}
-            </p>
+            <div className="rounded-md border">
+              <ErrorState error={info.error} />
+            </div>
           ) : (
             <>
               <pre className="max-h-40 overflow-auto rounded-md bg-muted px-3 py-2 text-xs">

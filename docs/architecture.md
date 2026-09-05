@@ -98,6 +98,54 @@ sequenceDiagram
 `{Result}` 而不是 `{code, message, data}`。两种信封都是历史形成的，前端依赖，
 没有改。
 
+## 请求 id 与错误
+
+### 每个响应都带一个 id
+
+`api.RequestID` 是挂在最前面的中间件：读入站的 `X-Request-Id`，没有或者不像话就
+生成一个（`observability.SanitizeRequestID`——这个头是调用方给的，会进日志行也会
+进响应头，带空白、控制字符或者超长的一律换掉，否则可以伪造日志行、劈开响应头）。
+
+id 放三个地方：标准 `context.Context`、web 框架自己的 per-request context（信封
+是只拿得到后者的）、以及响应头。所以连没有信封的响应——验证码图片、`/metrics`、
+panic——也带得上，而那恰恰是最需要查日志的几种。
+
+访问日志换成了 `api.AccessLog`，因为 hertz-contrib 那个没法把 id 打进去；只出现
+在响应里的 id 是没用的，重点就是拿它去日志里找对应那行。
+
+    响应头 X-Request-Id: 46ecc9df-…        信封 "requestId": "46ecc9df-…"
+    日志   request_id=46ecc9df-… kind=unauthenticated path=/auth/logout rejected="…"
+    日志   request_id=46ecc9df-… status=200 latency=159µs method=POST route=/auth/logout
+
+### 错误分类
+
+`internal/apperr` 里的 `Kind` 是唯一的分类，别的都从它派生：信封里的 `code`、
+机器可读的 `error` slug、控制面 API 的 HTTP 状态码、以及日志级别。
+
+| Kind | code | slug | 什么时候 |
+|---|---|---|---|
+| InvalidArgument | 400 | `invalid_argument` | 请求本身不对：绑定失败、校验不过 |
+| Unauthenticated | 401 | `unauthenticated` | 没有可用身份 |
+| PermissionDenied | 403 | `permission_denied` | 身份没问题，但不能做这件事 |
+| NotFound | 404 | `not_found` | 行不存在，或者对这个调用方不可见 |
+| Conflict | 409 | `conflict` | 和已有数据冲突 |
+| FailedPrecondition | 422 | `failed_precondition` | 请求没错，但系统状态不允许 |
+| Unavailable | 503 | `unavailable` | 依赖的东西连不上 |
+| Internal | 500 | `internal` | 我们自己的问题 |
+
+在这之前，48 个 handler 全都回同一个魔数 `20001`——不管是请求体格式错、行不存在、
+没权限，还是数据库挂了。客户端分不出来，只能把消息原样打出来；日志也没法决定哪些
+该吵、哪些不用管。现在 `Kind.ServerFault()` 决定日志级别：调用方自己填错端口不值
+一条 error，写库失败值。
+
+两条纪律：
+
+- **信封的 `code` 不是 HTTP 状态码。** 业务失败仍然回 HTTP 200，这是前端一直读的
+  约定；真回 401/403 的话前端会当成"登录没了"，把人踢去登录页。控制面 `/api/v1`
+  相反，它的客户端 `client.DoRequest` 只看状态码，所以那边照着 Kind 映射状态行。
+- **cause 只进日志，不进响应。** SQL 文本、驱动报错、内部 id 都在 cause 里；
+  调用方看到的是 `apperr` 的 Msg。
+
 ## 授权边界
 
 只有一条：`identity.Principal.IsSuperAdmin()`，也就是 JWT 里的

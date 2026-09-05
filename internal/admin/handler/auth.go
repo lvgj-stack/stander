@@ -14,6 +14,7 @@ import (
 
 	"github.com/lvgj-stack/stander/internal/admin/inout"
 	"github.com/lvgj-stack/stander/internal/admin/model"
+	"github.com/lvgj-stack/stander/internal/apperr"
 	"github.com/lvgj-stack/stander/internal/db"
 	"github.com/lvgj-stack/stander/internal/model/entity"
 	"github.com/lvgj-stack/stander/internal/utils"
@@ -26,24 +27,24 @@ type auth struct{}
 func (auth) Captcha(c context.Context, ctx *app.RequestContext) {
 	id, b64s, err := utils.GetCaptcha()
 	if err != nil {
-		Resp.Err(ctx, 20001, err.Error())
+		Resp.Fail(c, ctx, err)
 		return
 	}
 	session := sessions.Default(ctx)
 	session.Set("captch", id)
 	if err := session.Save(); err != nil {
-		Resp.Err(ctx, 20001, err.Error())
+		Resp.Fail(c, ctx, err)
 		return
 	}
 
 	parts := strings.SplitN(b64s, ",", 2)
 	if len(parts) != 2 {
-		Resp.Err(ctx, 20001, "malformed captcha payload")
+		Resp.Fail(c, ctx, apperr.Internalf("malformed captcha payload"))
 		return
 	}
 	imgData, err := base64.StdEncoding.DecodeString(parts[1])
 	if err != nil {
-		Resp.Err(ctx, 20001, err.Error())
+		Resp.Fail(c, ctx, err)
 		return
 	}
 
@@ -56,14 +57,14 @@ func (auth) Captcha(c context.Context, ctx *app.RequestContext) {
 func (auth) Login(c context.Context, ctx *app.RequestContext) {
 	var params inout.LoginReq
 	if err := ctx.BindAndValidate(&params); err != nil {
-		Resp.Err(ctx, 20001, err.Error())
+		Resp.Fail(c, ctx, err)
 		return
 	}
 
 	session := sessions.Default(ctx)
 	captchaID, ok := session.Get("captch").(string)
 	if !ok || !utils.VerifyCaptcha(captchaID, strings.ToLower(params.Captcha)) {
-		Resp.Err(ctx, 20001, "验证码不正确")
+		Resp.Fail(c, ctx, apperr.Invalidf("验证码不正确"))
 		return
 	}
 
@@ -73,7 +74,7 @@ func (auth) Login(c context.Context, ctx *app.RequestContext) {
 		Where("password=?", fmt.Sprintf("%x", md5.Sum([]byte(params.Password)))).
 		Find(&info)
 	if info.ID == nil || *info.ID == 0 {
-		Resp.Err(ctx, 20001, "账号或密码不正确")
+		Resp.Fail(c, ctx, apperr.Unauthorizedf("账号或密码不正确"))
 		return
 	}
 	userID := int(*info.ID)
@@ -98,7 +99,7 @@ func (auth) Login(c context.Context, ctx *app.RequestContext) {
 func (auth) Password(c context.Context, ctx *app.RequestContext) {
 	var params inout.AuthPwReq
 	if err := ctx.BindAndValidate(&params); err != nil {
-		Resp.Err(ctx, 20001, err.Error())
+		Resp.Fail(c, ctx, err)
 		return
 	}
 	uid, _ := ctx.Get("uid")
@@ -108,13 +109,13 @@ func (auth) Password(c context.Context, ctx *app.RequestContext) {
 		Where("id=? and password=?", uid, fmt.Sprintf("%x", md5.Sum([]byte(params.OldPassword)))).
 		Count(&matched)
 	if matched == 0 {
-		Resp.Err(ctx, 20001, "旧密码不正确")
+		Resp.Fail(c, ctx, apperr.Invalidf("旧密码不正确"))
 		return
 	}
 	if err := db.Dao.Model(entity.User{}).
 		Where("id=? ", uid).
 		Update("password", fmt.Sprintf("%x", md5.Sum([]byte(params.NewPassword)))).Error; err != nil {
-		Resp.Err(ctx, 20001, err.Error())
+		Resp.Fail(c, ctx, err)
 		return
 	}
 	Resp.Succ(ctx, true)
@@ -136,11 +137,11 @@ func (auth) SwitchRole(c context.Context, ctx *app.RequestContext) {
 	jwtToken, _ := ctx.Get("jwt_token")
 	claim, ok := jwtToken.(*utils.CustomClaims)
 	if !ok {
-		Resp.Err(ctx, 401, "无效的登录态")
+		Resp.Fail(c, ctx, apperr.Unauthorizedf("无效的登录态"))
 		return
 	}
 	if !slices.Contains(claim.RoleCodes, roleName) {
-		Resp.Err(ctx, 20001, "没有这个角色")
+		Resp.Fail(c, ctx, apperr.Forbiddenf("没有这个角色"))
 		return
 	}
 	claim.CurrentRoleCode = roleName

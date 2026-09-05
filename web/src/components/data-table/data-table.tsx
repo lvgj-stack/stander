@@ -6,6 +6,7 @@ import {
 } from '@tanstack/react-table'
 import { AlertCircleIcon, InboxIcon } from 'lucide-react'
 
+import { ErrorState } from '@/components/error-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -88,7 +89,7 @@ export function DataTable<TData>({
               <TableCell colSpan={columns.length} className="h-32">
                 <div className="flex flex-col items-center justify-center gap-2 text-destructive">
                   <AlertCircleIcon className="size-5" />
-                  <p className="text-sm">{error.message}</p>
+                  <ErrorState error={error} compact />
                 </div>
               </TableCell>
             </TableRow>

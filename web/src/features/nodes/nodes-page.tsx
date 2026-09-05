@@ -10,6 +10,7 @@ import {
   Trash2Icon,
 } from 'lucide-react'
 
+import { ErrorState } from '@/components/error-state'
 import { deleteNode, listNodeChains, listNodes } from '@/api/node'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { DataTable } from '@/components/data-table/data-table'
@@ -260,7 +261,7 @@ function NodeChainsDialog({ node, onClose }: { node: Node | undefined; onClose: 
         {query.isPending ? (
           <p className="py-6 text-center text-sm text-muted-foreground">加载中…</p>
         ) : query.error ? (
-          <p className="py-6 text-center text-sm text-destructive">{query.error.message}</p>
+          <ErrorState error={query.error} />
         ) : !query.data?.length ? (
           <p className="py-6 text-center text-sm text-muted-foreground">该节点上还没有链路</p>
         ) : (

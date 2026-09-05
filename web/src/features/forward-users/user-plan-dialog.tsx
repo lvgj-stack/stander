@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 
+import { ErrorState } from '@/components/error-state'
 import { getUserPlanInfo } from '@/api/forward-user'
 import {
   Dialog,
@@ -36,7 +37,7 @@ export function UserPlanDialog({
         {query.isPending ? (
           <p className="py-8 text-center text-sm text-muted-foreground">加载中…</p>
         ) : query.error ? (
-          <p className="py-8 text-center text-sm text-destructive">{query.error.message}</p>
+          <ErrorState error={query.error} className="py-8" />
         ) : !query.data ? (
           <p className="py-8 text-center text-sm text-muted-foreground">没有数据</p>
         ) : (

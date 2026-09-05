@@ -6,6 +6,8 @@ import { useForm } from 'react-hook-form'
 import { Loader2Icon, NetworkIcon, RefreshCwIcon } from 'lucide-react'
 import { z } from 'zod'
 
+import { ErrorState } from '@/components/error-state'
+import { errorDetail, errorTitle } from '@/lib/errors'
 import { fetchCaptcha } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -33,6 +35,8 @@ export function LoginPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [formError, setFormError] = useState<string | null>(null)
+  // The log id, shown only when the failure is not something the user typed.
+  const [formErrorId, setFormErrorId] = useState<string | null>(null)
 
   /**
    * The captcha image.
@@ -74,11 +78,13 @@ export function LoginPage() {
 
   const onSubmit = async (values: LoginValues) => {
     setFormError(null)
+    setFormErrorId(null)
     try {
       await login(values)
       navigate(searchParams.get('redirect') ?? '/', { replace: true })
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : '登录失败')
+      setFormError(errorTitle(error))
+      setFormErrorId(errorDetail(error))
       // The consumed captcha is dead either way; hand over a new one so the
       // next attempt is not guaranteed to fail too.
       form.setValue('captcha', '')
@@ -152,9 +158,7 @@ export function LoginPage() {
                       </button>
                     </div>
                     {captchaQuery.error && (
-                      <p className="text-sm text-destructive">
-                        {captchaQuery.error.message}
-                      </p>
+                      <ErrorState error={captchaQuery.error} className="py-1" compact />
                     )}
                     <FormMessage />
                   </FormItem>
@@ -162,9 +166,10 @@ export function LoginPage() {
               />
 
               {formError && (
-                <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  {formError}
-                </p>
+                <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  <p>{formError}</p>
+                  {formErrorId && <p className="tabular mt-0.5 text-xs opacity-80">{formErrorId}</p>}
+                </div>
               )}
 
               <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>

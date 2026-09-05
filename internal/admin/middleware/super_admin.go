@@ -6,6 +6,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 
 	"github.com/lvgj-stack/stander/internal/admin/handler"
+	"github.com/lvgj-stack/stander/internal/apperr"
 	"github.com/lvgj-stack/stander/internal/identity"
 )
 
@@ -23,7 +24,7 @@ import (
 func SuperAdmin() app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		if !identity.FromContext(c).IsSuperAdmin() {
-			handler.Resp.Err(ctx, 403, "需要管理员权限")
+			handler.Resp.Fail(c, ctx, apperr.Forbiddenf("需要管理员权限"))
 			ctx.Abort()
 			return
 		}

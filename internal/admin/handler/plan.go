@@ -18,18 +18,18 @@ func (plan) Handle(c context.Context, ctx *app.RequestContext) {
 	case "ListPlans":
 		res, err := call(c, ctx, service.ListPlans)
 		if err != nil {
-			Resp.Err(ctx, 20001, err.Error())
+			Resp.Fail(c, ctx, err)
 			return
 		}
 		Resp.Succ(ctx, res)
 	case "AssociatePlan":
 		res, err := call(c, ctx, service.AssociatePlan)
 		if err != nil {
-			Resp.Err(ctx, 20001, err.Error())
+			Resp.Fail(c, ctx, err)
 			return
 		}
 		Resp.Succ(ctx, res)
 	default:
-		unknownAction(ctx, action)
+		unknownAction(c, ctx, action)
 	}
 }

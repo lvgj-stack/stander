@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -9,6 +10,7 @@ import (
 
 	"github.com/lvgj-stack/stander/internal/common"
 	"github.com/lvgj-stack/stander/internal/config"
+	"github.com/lvgj-stack/stander/internal/observability"
 	"github.com/lvgj-stack/stander/internal/utils"
 )
 
@@ -262,4 +264,96 @@ func contains(haystack, needle string) bool {
 		}
 	}
 	return false
+}
+
+// The console envelope is a wire contract the frontend reads, so its shape is
+// pinned here: same fields in the same place whether the call succeeded or
+// not, a classification a client can branch on, and a request id on every
+// single response — that id is what a user quotes and what you grep for, so a
+// response without one is a failure nobody can investigate.
+func TestConsoleEnvelopeShape(t *testing.T) {
+	utils.SetJWTSigningKey("test-signing-key")
+	h := server.New(server.WithHostPorts(":0"))
+	h.Use(RequestID())
+	RegisterAdmin(h)
+	token := "Bearer " + utils.GenerateToken(3, 3, "user01", "USER", []string{"USER"})
+
+	decode := func(t *testing.T, w *ut.ResponseRecorder) map[string]any {
+		t.Helper()
+		var envelope map[string]any
+		if err := json.Unmarshal(w.Result().Body(), &envelope); err != nil {
+			t.Fatalf("envelope is not JSON: %v (%s)", err, w.Result().Body())
+		}
+		return envelope
+	}
+
+	// Every response echoes the id in a header too, and the two must agree —
+	// otherwise a caller reading one and an operator grepping the other are
+	// chasing different requests.
+	assertRequestID := func(t *testing.T, w *ut.ResponseRecorder, envelope map[string]any) {
+		t.Helper()
+		id, _ := envelope["requestId"].(string)
+		if id == "" {
+			t.Fatal("envelope carries no requestId")
+		}
+		if header := w.Result().Header.Get(observability.RequestIDHeader); header != id {
+			t.Fatalf("header id %q != envelope id %q", header, id)
+		}
+	}
+
+	// /auth/logout is the one authenticated success that touches no database.
+	t.Run("success", func(t *testing.T) {
+		w := ut.PerformRequest(h.Engine, http.MethodPost, "/auth/logout", nil,
+			ut.Header{Key: "Authorization", Value: token})
+		envelope := decode(t, w)
+		assertRequestID(t, w, envelope)
+
+		if envelope["code"] != float64(0) {
+			t.Errorf("code = %v, want 0", envelope["code"])
+		}
+		// `error` is the classification slug and must be absent on success,
+		// so a client can treat its presence as "this failed".
+		if _, present := envelope["error"]; present {
+			t.Errorf("success envelope carries an error slug: %v", envelope)
+		}
+	})
+
+	// Each of these used to answer with the same magic 20001.
+	for _, tt := range []struct {
+		name   string
+		method string
+		path   string
+		auth   bool
+		code   float64
+		slug   string
+	}{
+		{"no token", http.MethodPost, "/auth/logout", false, 401, "unauthenticated"},
+		{"not an administrator", http.MethodGet, "/user", true, 403, "permission_denied"},
+		{"unknown action", http.MethodPost, "/stander/node?Action=Nope", true, 400, "invalid_argument"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var headers []ut.Header
+			if tt.auth {
+				headers = append(headers, ut.Header{Key: "Authorization", Value: token})
+			}
+			w := ut.PerformRequest(h.Engine, tt.method, tt.path, nil, headers...)
+			envelope := decode(t, w)
+			assertRequestID(t, w, envelope)
+
+			if envelope["code"] != tt.code {
+				t.Errorf("code = %v, want %v", envelope["code"], tt.code)
+			}
+			if envelope["error"] != tt.slug {
+				t.Errorf("error = %v, want %q", envelope["error"], tt.slug)
+			}
+			if msg, _ := envelope["message"].(string); msg == "" {
+				t.Error("a failure envelope must carry a message for the user")
+			}
+			// The status line stays 200; the frontend treats a real 401/403
+			// as "your session is gone" and would log the user out.
+			if got := w.Result().StatusCode(); got != http.StatusOK {
+				t.Errorf("HTTP status = %d, want 200 with the failure in the envelope", got)
+			}
+		})
+	}
 }

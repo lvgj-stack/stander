@@ -18,14 +18,14 @@ func (standerUser) Handle(c context.Context, ctx *app.RequestContext) {
 	case "GetUserPlanInfo":
 		res, err := call(c, ctx, service.GetUserPlanInfo)
 		if err != nil {
-			Resp.Err(ctx, 20001, err.Error())
+			Resp.Fail(c, ctx, err)
 			return
 		}
 		Resp.Succ(ctx, res)
 	case "ListUsers":
 		res, err := call(c, ctx, service.ListUsers)
 		if err != nil {
-			Resp.Err(ctx, 20001, err.Error())
+			Resp.Fail(c, ctx, err)
 			return
 		}
 		Resp.Succ(ctx, map[string]any{
@@ -35,23 +35,23 @@ func (standerUser) Handle(c context.Context, ctx *app.RequestContext) {
 	case "GetUserResources":
 		res, err := call(c, ctx, service.GetUserResources)
 		if err != nil {
-			Resp.Err(ctx, 20001, err.Error())
+			Resp.Fail(c, ctx, err)
 			return
 		}
 		Resp.Succ(ctx, res)
 	case "SetUserResources":
 		if _, err := call(c, ctx, service.SetUserResources); err != nil {
-			Resp.Err(ctx, 20001, err.Error())
+			Resp.Fail(c, ctx, err)
 			return
 		}
 		Resp.Succ(ctx, nil)
 	case "EditUser":
 		if _, err := call(c, ctx, service.EditUser); err != nil {
-			Resp.Err(ctx, 20001, err.Error())
+			Resp.Fail(c, ctx, err)
 			return
 		}
 		Resp.Succ(ctx, nil)
 	default:
-		unknownAction(ctx, action)
+		unknownAction(c, ctx, action)
 	}
 }

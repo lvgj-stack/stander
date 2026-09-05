@@ -25,7 +25,7 @@ func (chainGroup) Handle(c context.Context, ctx *app.RequestContext) {
 	case "ListChainGroups":
 		res, err := call(c, ctx, service.ListChainGroup)
 		if err != nil {
-			Resp.Err(ctx, 20001, err.Error())
+			Resp.Fail(c, ctx, err)
 			return
 		}
 		Resp.Succ(ctx, map[string]interface{}{
@@ -35,30 +35,30 @@ func (chainGroup) Handle(c context.Context, ctx *app.RequestContext) {
 	case "AddChainGroup":
 		res, err := call(c, ctx, service.AddChainGroup)
 		if err != nil {
-			Resp.Err(ctx, 20001, err.Error())
+			Resp.Fail(c, ctx, err)
 			return
 		}
 		Resp.Succ(ctx, res)
 	case "DeleteChainGroup":
 		res, err := call(c, ctx, service.DelChainGroup)
 		if err != nil {
-			Resp.Err(ctx, 20001, err.Error())
+			Resp.Fail(c, ctx, err)
 			return
 		}
 		Resp.Succ(ctx, res)
 	case "EditChainGroup":
 		if _, err := call(c, ctx, service.EditChainGroup); err != nil {
-			Resp.Err(ctx, 20001, err.Error())
+			Resp.Fail(c, ctx, err)
 			return
 		}
 		Resp.Succ(ctx, nil)
 	case "EditChain":
 		if _, err := call(c, ctx, service.EditChain); err != nil {
-			Resp.Err(ctx, 20001, err.Error())
+			Resp.Fail(c, ctx, err)
 			return
 		}
 		Resp.Succ(ctx, nil)
 	default:
-		unknownAction(ctx, action)
+		unknownAction(c, ctx, action)
 	}
 }

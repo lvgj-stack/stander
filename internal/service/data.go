@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"strconv"
 	"strings"
 	"sync"
@@ -11,6 +10,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/common/hlog"
 	"gorm.io/gorm/clause"
 
+	"github.com/lvgj-stack/stander/internal/apperr"
 	"github.com/lvgj-stack/stander/internal/client"
 	"github.com/lvgj-stack/stander/internal/config"
 	"github.com/lvgj-stack/stander/internal/identity"
@@ -54,7 +54,7 @@ func ObserverNetworkTraffic(ctx context.Context, r *req.ObserverNetworkTrafficRe
 func ReportNetworkTraffic(ctx context.Context, r *req.ReportNetworkTrafficReq) (*resp.ReportNetworkTrafficResp, error) {
 	k := identity.FromContext(ctx).NodeKey
 	if k == "" {
-		return nil, errors.New("header key not found")
+		return nil, apperr.Unauthorizedf("请求没有携带节点密钥")
 	}
 	node, err := dal.Node.WithContext(ctx).Where(dal.Node.Key.Eq(k)).First()
 	if err != nil {

@@ -6,7 +6,9 @@ import (
 	"net/http"
 
 	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/cloudwego/hertz/pkg/common/hlog"
 
+	"github.com/lvgj-stack/stander/internal/apperr"
 	"github.com/lvgj-stack/stander/internal/service"
 	"github.com/lvgj-stack/stander/internal/service/req"
 )
@@ -16,16 +18,57 @@ var errActionNotFound = errors.New("action not found")
 
 // writeResponse renders the controller API's envelope. This used to live in
 // internal/service/error, which forced the whole service layer to import Hertz.
-func writeResponse(ctx *app.RequestContext, err error, data any) {
+//
+// The shape is the one agents already parse (resp.RawResponse: Result, Error,
+// RequestId) — RequestId was declared on that struct from the start and never
+// actually sent, so filling it in completes a contract rather than changing
+// one. Unlike the console API this one puts the classification on the status
+// line as well, because its client is `client.DoRequest`, which only looks at
+// the status code.
+func writeResponse(c context.Context, ctx *app.RequestContext, err error, data any) {
+	id := requestIDOf(ctx)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, map[string]any{
-			"Error": err.Error(),
+		e := apperr.From(err)
+		if e.Kind.ServerFault() {
+			hlog.CtxErrorf(c, "request_id=%s kind=%s path=%s error=%v",
+				id, e.Kind.Slug(), string(ctx.Request.URI().Path()), err)
+		}
+		ctx.JSON(httpStatusFor(e.Kind), map[string]any{
+			"Error":     e.Message(),
+			"Code":      e.Kind.Code(),
+			"RequestId": id,
 		})
 		return
 	}
 	ctx.JSON(http.StatusOK, map[string]any{
-		"Result": data,
+		"Result":    data,
+		"RequestId": id,
 	})
+}
+
+// httpStatusFor maps a failure onto the status line for the controller API.
+//
+// Anything that is not a clean success has to stay non-2xx: client.DoRequest
+// treats every non-200 as a failure and nothing else, so collapsing these
+// would silently turn a rejection into a success on the agent side.
+func httpStatusFor(k apperr.Kind) int {
+	switch k {
+	case apperr.InvalidArgument:
+		return http.StatusBadRequest
+	case apperr.Unauthenticated:
+		return http.StatusUnauthorized
+	case apperr.PermissionDenied:
+		return http.StatusForbidden
+	case apperr.NotFound:
+		return http.StatusNotFound
+	case apperr.Conflict:
+		return http.StatusConflict
+	case apperr.FailedPrecondition:
+		return http.StatusUnprocessableEntity
+	case apperr.Unavailable:
+		return http.StatusServiceUnavailable
+	}
+	return http.StatusInternalServerError
 }
 
 // call binds the request body into T and invokes a service action with it.
@@ -66,7 +109,7 @@ func nodeSrv(c context.Context, ctx *app.RequestContext) {
 	default:
 		err = errActionNotFound
 	}
-	writeResponse(ctx, err, res)
+	writeResponse(c, ctx, err, res)
 }
 
 func chainSrv(c context.Context, ctx *app.RequestContext) {
@@ -86,7 +129,7 @@ func chainSrv(c context.Context, ctx *app.RequestContext) {
 	default:
 		err = errActionNotFound
 	}
-	writeResponse(ctx, err, res)
+	writeResponse(c, ctx, err, res)
 }
 
 func chainGroupSrv(c context.Context, ctx *app.RequestContext) {
@@ -104,7 +147,7 @@ func chainGroupSrv(c context.Context, ctx *app.RequestContext) {
 	default:
 		err = errActionNotFound
 	}
-	writeResponse(ctx, err, res)
+	writeResponse(c, ctx, err, res)
 }
 
 func ruleSrv(c context.Context, ctx *app.RequestContext) {
@@ -126,7 +169,7 @@ func ruleSrv(c context.Context, ctx *app.RequestContext) {
 	default:
 		err = errActionNotFound
 	}
-	writeResponse(ctx, err, res)
+	writeResponse(c, ctx, err, res)
 }
 
 func userSrv(c context.Context, ctx *app.RequestContext) {
@@ -146,7 +189,7 @@ func userSrv(c context.Context, ctx *app.RequestContext) {
 	default:
 		err = errActionNotFound
 	}
-	writeResponse(ctx, err, res)
+	writeResponse(c, ctx, err, res)
 }
 
 func planSrv(c context.Context, ctx *app.RequestContext) {
@@ -160,7 +203,7 @@ func planSrv(c context.Context, ctx *app.RequestContext) {
 	default:
 		err = errActionNotFound
 	}
-	writeResponse(ctx, err, res)
+	writeResponse(c, ctx, err, res)
 }
 
 func dataSrv(c context.Context, ctx *app.RequestContext) {
@@ -174,5 +217,5 @@ func dataSrv(c context.Context, ctx *app.RequestContext) {
 	default:
 		err = errActionNotFound
 	}
-	writeResponse(ctx, err, res)
+	writeResponse(c, ctx, err, res)
 }

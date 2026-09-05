@@ -117,6 +117,66 @@ describe('credentials and headers', () => {
   })
 })
 
+// The request id is what a user quotes and what an operator greps for, so it
+// has to reach the ApiError from wherever it is available — including the
+// failures that never produce an envelope, which are exactly the ones worth
+// looking up.
+describe('request id and classification', () => {
+  it('carries the id and the kind off the envelope', async () => {
+    mockFetch(() =>
+      envelope({
+        code: 409,
+        error: 'conflict',
+        message: '用户名已存在',
+        requestId: 'env-id',
+        originUrl: '/user',
+      }),
+    )
+
+    const error = await api.post('/user').catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(ApiError)
+    expect((error as ApiError).kind).toBe('conflict')
+    expect((error as ApiError).requestId).toBe('env-id')
+    expect((error as ApiError).isServerFault).toBe(false)
+  })
+
+  it('falls back to the response header when there is no envelope', async () => {
+    // A proxy 502, a truncated body: no envelope to read, but the header
+    // survives — and this is precisely when someone needs the id.
+    mockFetch(
+      () =>
+        new Response('<html>502 Bad Gateway</html>', {
+          status: 502,
+          headers: { 'X-Request-Id': 'header-id' },
+        }),
+    )
+
+    const error = await api.get('/user/detail').catch((e: unknown) => e)
+    expect((error as ApiError).requestId).toBe('header-id')
+    expect((error as ApiError).isServerFault).toBe(true)
+  })
+
+  it('falls back to the header when the body is not JSON', async () => {
+    mockFetch(
+      () =>
+        new Response('not json at all', {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'X-Request-Id': 'header-id' },
+        }),
+    )
+
+    const error = await api.get('/user/detail').catch((e: unknown) => e)
+    expect((error as ApiError).requestId).toBe('header-id')
+  })
+
+  it('defaults to internal when the backend sends no classification', async () => {
+    mockFetch(() => envelope({ code: 500, message: '服务器内部错误', originUrl: '/user' }))
+
+    const error = await api.get('/user').catch((e: unknown) => e)
+    expect((error as ApiError).kind).toBe('internal')
+  })
+})
+
 describe('signed-out handling', () => {
   it('clears the token and notifies on HTTP 401', async () => {
     setToken('jwt-abc')
@@ -136,12 +196,41 @@ describe('signed-out handling', () => {
     setToken('jwt-abc')
     const onUnauthorized = vi.fn()
     setUnauthorizedHandler(onUnauthorized)
-    mockFetch(() => envelope({ code: 10002, message: '授权已过期', originUrl: '/user/detail' }))
+    mockFetch(() =>
+      envelope({
+        code: 401,
+        error: 'unauthenticated',
+        message: '授权已过期',
+        originUrl: '/user/detail',
+      }),
+    )
 
     await expect(api.get('/user/detail')).rejects.toThrow('授权已过期')
 
     expect(getToken()).toBeNull()
     expect(onUnauthorized).toHaveBeenCalledOnce()
+  })
+
+  // 403 is "you may not do this", not "sign in again". Signing the user out
+  // here would eject a forwarding user for opening an admin URL — the two
+  // sides of the console are separated by exactly this distinction.
+  it('keeps the session on a permission_denied envelope', async () => {
+    setToken('jwt-abc')
+    const onUnauthorized = vi.fn()
+    setUnauthorizedHandler(onUnauthorized)
+    mockFetch(() =>
+      envelope({
+        code: 403,
+        error: 'permission_denied',
+        message: '需要管理员权限',
+        originUrl: '/user',
+      }),
+    )
+
+    await expect(api.get('/user')).rejects.toThrow('需要管理员权限')
+
+    expect(getToken()).toBe('jwt-abc')
+    expect(onUnauthorized).not.toHaveBeenCalled()
   })
 
   it('leaves the session alone for an ordinary business error', async () => {

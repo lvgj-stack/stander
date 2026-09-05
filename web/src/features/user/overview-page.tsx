@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ArrowRightIcon, RouteIcon, ServerIcon } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
+import { ErrorState } from '@/components/error-state'
 import { getUserPlanInfo } from '@/api/forward-user'
 import { listNodes } from '@/api/node'
 import { listRules } from '@/api/rule'
@@ -77,7 +78,7 @@ export function UserOverviewPage() {
               <Skeleton className="h-32 w-full" />
             </div>
           ) : plan.error ? (
-            <p className="py-6 text-center text-sm text-destructive">{plan.error.message}</p>
+            <ErrorState error={plan.error} />
           ) : !plan.data ? (
             <p className="py-6 text-center text-sm text-muted-foreground">还没有套餐信息</p>
           ) : (

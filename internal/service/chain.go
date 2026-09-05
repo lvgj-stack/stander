@@ -11,6 +11,7 @@ import (
 	"gorm.io/gen"
 	"gorm.io/gorm"
 
+	"github.com/lvgj-stack/stander/internal/apperr"
 	"github.com/lvgj-stack/stander/internal/client"
 	"github.com/lvgj-stack/stander/internal/common"
 	"github.com/lvgj-stack/stander/internal/config"
@@ -22,7 +23,7 @@ import (
 	"github.com/lvgj-stack/stander/internal/service/resp"
 )
 
-var permissionDenyError = errors.New("permission deny")
+var permissionDenyError = apperr.Forbiddenf("没有权限操作该资源")
 
 func checkUserChainPermission(ctx context.Context, chainIds ...int64) error {
 	if identity.FromContext(ctx).IsSuperAdmin() {
@@ -67,10 +68,10 @@ func AddChain(ctx context.Context, r *req.AddChainReq) (*resp.AddChainResp, erro
 	// admin console lists un-registered nodes in the "add chain" picker too, so
 	// guard here rather than dereferencing a nil pointer into a 500.
 	if node.IP == nil || node.Port == nil || node.Key == nil {
-		return nil, errors.New("node has not registered yet")
+		return nil, apperr.FailedPreconditionf("节点还没有注册，agent 尚未连上控制面")
 	}
 	if r.PreferIpv6 && node.Ipv6 == nil {
-		return nil, errors.New("node has no IPv6 address")
+		return nil, apperr.FailedPreconditionf("该节点没有 IPv6 地址")
 	}
 
 	chainIp := *node.IP
@@ -83,7 +84,7 @@ func AddChain(ctx context.Context, r *req.AddChainReq) (*resp.AddChainResp, erro
 		dal.Chain.NodeID.Eq(r.NodeId),
 		dal.Chain.IP.Eq(chainIp)).First()
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, errors.New("chain port exist")
+		return nil, apperr.Conflictf("该端口上已经有链路了")
 	}
 	cnt, err := dal.Q.Chain.WithContext(ctx).Where(dal.Chain.NodeID.Eq(node.ID), dal.Chain.Port.Eq(r.Port)).Count()
 	if err != nil {
@@ -104,7 +105,7 @@ func AddChain(ctx context.Context, r *req.AddChainReq) (*resp.AddChainResp, erro
 		Protocol:  &r.ChainType,
 	}); err != nil {
 		if strings.Contains(err.Error(), "Duplicate entry") {
-			return nil, errors.New("the specified chain already exist")
+			return nil, apperr.Conflictf("链路已存在")
 		}
 		return nil, err
 	}

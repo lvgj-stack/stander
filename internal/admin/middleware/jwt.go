@@ -6,6 +6,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 
 	"github.com/lvgj-stack/stander/internal/admin/handler"
+	"github.com/lvgj-stack/stander/internal/apperr"
 	"github.com/lvgj-stack/stander/internal/identity"
 	"github.com/lvgj-stack/stander/internal/utils"
 )
@@ -21,7 +22,7 @@ func Jwt() app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		token := string(ctx.GetHeader("Authorization"))
 		if token == "" {
-			handler.Resp.Err(ctx, 401, "请求未携带token，无权限访问")
+			handler.Resp.Fail(c, ctx, apperr.Unauthorizedf("请求未携带 token，无权限访问"))
 			ctx.Abort()
 			return
 		}
@@ -32,9 +33,9 @@ func Jwt() app.HandlerFunc {
 		claims, err := utils.NewJWT().ParseToken(token)
 		if err != nil {
 			if err == utils.TokenExpired {
-				handler.Resp.Err(ctx, 401, "授权已过期")
+				handler.Resp.Fail(c, ctx, apperr.Unauthorizedf("授权已过期"))
 			} else {
-				handler.Resp.Err(ctx, 401, err.Error())
+				handler.Resp.Fail(c, ctx, apperr.Unauthorizedf("登录态无效: %w", err))
 			}
 			ctx.Abort()
 			return
