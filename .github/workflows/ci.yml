@@ -24,9 +24,9 @@ jobs:
     name: go
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           # Kept in step with the go directive in go.mod and the builder image
           # in Dockerfile. All three drifting apart is how a build starts
@@ -60,16 +60,16 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           # This step runs at the repository root — `defaults.run.working-directory`
           # only applies to `run:` steps — and there is no package.json there, so
           # the action has to be pointed at the one that carries `packageManager`.
           package_json_file: web/package.json
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: web/.nvmrc
           cache: pnpm
@@ -86,7 +86,7 @@ jobs:
     name: manifests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Render every overlay
         # A kustomization that does not build is a deploy that fails after the
@@ -112,7 +112,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [go, web, manifests]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install kind
         # The script owns the cluster end to end — creating it, loading images,
