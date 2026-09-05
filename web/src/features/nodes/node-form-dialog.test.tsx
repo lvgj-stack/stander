@@ -60,6 +60,23 @@ describe('NodeFormDialog', () => {
     })
   })
 
+  it('reports a negative rate through the form instead of letting the browser swallow it', async () => {
+    const fetchMock = stubAddNode()
+    renderDialog()
+
+    fireEvent.change(screen.getByPlaceholderText('hk-01'), { target: { value: 'hk-01' } })
+    fireEvent.change(screen.getByLabelText('流量倍率'), { target: { value: '-1' } })
+    fireEvent.click(screen.getByRole('button', { name: '创建' }))
+
+    // The rule lives in the zod schema, so the user reads it in the dialog. A
+    // `min` on the input would instead make the control invalid, and a form
+    // with an invalid control is one the browser refuses to submit at all —
+    // no submit event, no handler, no message, the same silence that once made
+    // 创建 do nothing.
+    expect(await screen.findByText('倍率必须大于 0')).toBeTruthy()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('leaves no control the browser would refuse to submit', () => {
     renderDialog()
     fireEvent.change(screen.getByPlaceholderText('hk-01'), { target: { value: 'hk-01' } })

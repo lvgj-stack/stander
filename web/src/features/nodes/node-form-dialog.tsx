@@ -170,18 +170,19 @@ export function NodeFormDialog({ open, onOpenChange, node, onCreated }: NodeForm
                   <FormControl>
                     <Input
                       type="number"
-                      // `step="any"`, not a decimal step: a step turns the
-                      // browser's own constraint validation on, and 1 against
-                      // step 0.1 based at min 0.1 is a step mismatch in
-                      // floating point ((1 - 0.1) / 0.1 is 8.999999999999998).
-                      // An invalid control makes the browser refuse to submit
-                      // the form at all — no submit event, so the handler that
-                      // sends AddNode never runs and 创建 silently does
-                      // nothing. The rule the rate actually has (> 0) lives in
-                      // the zod schema, which reports it where the user can
-                      // see it.
+                      // No `min` and `step="any"`: neither of those attributes
+                      // is a second place to write "the rate must be > 0", they
+                      // are a way to make the control invalid, and a form with
+                      // an invalid control is one the browser refuses to submit
+                      // at all — no submit event, so the handler that sends
+                      // AddNode never runs and 创建 silently does nothing. A
+                      // decimal step did that to the default rate of 1
+                      // ((1 - 0.1) / 0.1 is 8.999999999999998, a step
+                      // mismatch); `min` did it to any negative rate the user
+                      // typed. The rule lives in the zod schema and in
+                      // validateAddNode, and the schema reports it in the
+                      // dialog where the user can read it.
                       step="any"
-                      min="0"
                       name={field.name}
                       ref={field.ref}
                       onBlur={field.onBlur}
