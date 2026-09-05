@@ -433,3 +433,50 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
     "originUrl":"/role"
 }
 ```
+
+###  资源授权-读取 post : /stander/user?Action=GetUserResources  **仅管理员**
+
+一个用户被授权使用哪些节点和链路。用户端的每一次读写都落在这上面。
+
+**request**
+```
+{
+    "UserId":3
+}
+```
+
+**response**
+```
+{
+    "code":0,
+    "message":"OK",
+    "data":{
+        "NodeIds":[1,2],
+        "ChainIds":[5]
+    },
+    "originUrl":"/stander/user"
+}
+```
+
+###  资源授权-保存 post : /stander/user?Action=SetUserResources  **仅管理员**
+
+整组替换，空数组表示收回全部授权。只动这个用户自己的行，管理员建节点时按角色写
+的那些行不受影响。
+
+**request**
+```
+{
+    "UserId":3,
+    "NodeIds":[1,2],
+    "ChainIds":[5]
+}
+```
+
+**response**
+```
+{
+    "code":0,
+    "message":"OK",
+    "originUrl":"/stander/user"
+}
+```

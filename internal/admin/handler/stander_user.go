@@ -32,6 +32,19 @@ func (standerUser) Handle(c context.Context, ctx *app.RequestContext) {
 			"pageData": res.Users,
 			"total":    res.TotalCount,
 		})
+	case "GetUserResources":
+		res, err := call(c, ctx, service.GetUserResources)
+		if err != nil {
+			Resp.Err(ctx, 20001, err.Error())
+			return
+		}
+		Resp.Succ(ctx, res)
+	case "SetUserResources":
+		if _, err := call(c, ctx, service.SetUserResources); err != nil {
+			Resp.Err(ctx, 20001, err.Error())
+			return
+		}
+		Resp.Succ(ctx, nil)
 	case "EditUser":
 		if _, err := call(c, ctx, service.EditUser); err != nil {
 			Resp.Err(ctx, 20001, err.Error())

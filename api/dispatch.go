@@ -139,6 +139,10 @@ func userSrv(c context.Context, ctx *app.RequestContext) {
 		res, err = call(c, ctx, service.ListUsers)
 	case "EditUser":
 		res, err = call(c, ctx, service.EditUser)
+	case "GetUserResources":
+		res, err = call(c, ctx, service.GetUserResources)
+	case "SetUserResources":
+		res, err = call(c, ctx, service.SetUserResources)
 	default:
 		err = errActionNotFound
 	}

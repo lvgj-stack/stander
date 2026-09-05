@@ -3,10 +3,14 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
+
+	"github.com/DATA-DOG/go-sqlmock"
 
 	"github.com/lvgj-stack/stander/internal/identity"
 	"github.com/lvgj-stack/stander/internal/model/entity"
+	"github.com/lvgj-stack/stander/internal/service/req"
 )
 
 // GetUserPlanInfo takes the user id from the request body. That is fine for the
@@ -147,4 +151,48 @@ func TestRedactForCaller(t *testing.T) {
 		redactForCaller(ctx, nil, nil, []*entity.Rule{nil})
 		redactForCaller(ctx, nil, nil, nil)
 	})
+}
+
+// The grants these two actions manage are what make the user portal usable at
+// all — every read and write on that side is scoped to them — so they are
+// administrator-only, and must refuse before touching the database.
+func TestUserResourceGrantsAreAdminOnly(t *testing.T) {
+	userCtx := identity.NewContext(context.Background(), identity.Principal{UserID: 3, RoleCode: "USER"})
+
+	t.Run("GetUserResources", func(t *testing.T) {
+		mock := newMockDB(t)
+		if _, err := GetUserResources(userCtx, &req.GetUserResourcesReq{UserId: 3}); !errors.Is(err, ErrForbidden) {
+			t.Fatalf("GetUserResources as USER = %v, want ErrForbidden", err)
+		}
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("the refusal must not have hit the database: %v", err)
+		}
+	})
+
+	// The dangerous direction: a user granting themselves every node.
+	t.Run("SetUserResources", func(t *testing.T) {
+		mock := newMockDB(t)
+		_, err := SetUserResources(userCtx, &req.SetUserResourcesReq{UserId: 3, NodeIds: []int64{1, 2}})
+		if !errors.Is(err, ErrForbidden) {
+			t.Fatalf("SetUserResources as USER = %v, want ErrForbidden", err)
+		}
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("the refusal must not have hit the database: %v", err)
+		}
+	})
+}
+
+// An id with no row behind it must be rejected rather than stored: the grant
+// would sit there looking like access to whatever id gets reused next.
+func TestSetUserResourcesRejectsAnUnknownNode(t *testing.T) {
+	mock := newMockDB(t)
+	mock.ExpectQuery("SELECT \\* FROM `nodes`").WillReturnRows(sqlmock.NewRows([]string{"id"}))
+
+	_, err := SetUserResources(adminCtx(), &req.SetUserResourcesReq{UserId: 3, NodeIds: []int64{404}})
+	if err == nil {
+		t.Fatal("expected a grant to a non-existent node to be refused")
+	}
+	if !strings.Contains(err.Error(), "404") {
+		t.Errorf("the error should name the offending id, got %v", err)
+	}
 }

@@ -3,7 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { deleteChain, listChains } from './chain'
 import { listChainGroups } from './chain-group'
 import { clearToken } from './client'
-import { editForwardUser, listForwardUsers } from './forward-user'
+import {
+  editForwardUser,
+  getUserResources,
+  listForwardUsers,
+  setUserResources,
+} from './forward-user'
 import { associatePlan, listPlans } from './plan'
 import { addNode, deleteNode, listNodes } from './node'
 import { listRoles } from './role'
@@ -145,6 +150,24 @@ describe('forwarding user and plan actions', () => {
   it('lists plans', async () => {
     await listPlans()
     expect(sent().url).toBe('/stander/plan?Action=ListPlans')
+  })
+
+  it('reads a user’s resource grants', async () => {
+    await getUserResources(3)
+    expect(sent()).toMatchObject({
+      url: '/stander/user?Action=GetUserResources',
+      body: { UserId: 3 },
+    })
+  })
+
+  // The grant set is replaced wholesale, so empty arrays have to reach the
+  // server as empty arrays — dropping them would turn a revoke into a no-op.
+  it('sends both grant lists even when they are empty', async () => {
+    await setUserResources(3, [], [])
+    expect(sent()).toMatchObject({
+      url: '/stander/user?Action=SetUserResources',
+      body: { UserId: 3, NodeIds: [], ChainIds: [] },
+    })
   })
 })
 

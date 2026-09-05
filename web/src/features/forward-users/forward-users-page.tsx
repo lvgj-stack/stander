@@ -1,7 +1,13 @@
 import { useState } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import type { ColumnDef } from '@tanstack/react-table'
-import { CalendarIcon, ChartColumnIcon, MoreHorizontalIcon, TicketIcon } from 'lucide-react'
+import {
+  CalendarIcon,
+  ChartColumnIcon,
+  KeyRoundIcon,
+  MoreHorizontalIcon,
+  TicketIcon,
+} from 'lucide-react'
 
 import { listForwardUsers } from '@/api/forward-user'
 import { DataTable } from '@/components/data-table/data-table'
@@ -23,12 +29,14 @@ import type { ForwardUser } from '@/types/api'
 import { AssociatePlanDialog } from './associate-plan-dialog'
 import { EditExpirationDialog } from './edit-expiration-dialog'
 import { UserPlanDialog } from './user-plan-dialog'
+import { UserResourcesDialog } from './user-resources-dialog'
 
 export function ForwardUsersPage() {
   const params = useTableParams()
   const [planFor, setPlanFor] = useState<ForwardUser | undefined>()
   const [associateFor, setAssociateFor] = useState<ForwardUser | undefined>()
   const [expirationFor, setExpirationFor] = useState<ForwardUser | undefined>()
+  const [resourcesFor, setResourcesFor] = useState<ForwardUser | undefined>()
 
   const query = useQuery({
     queryKey: ['forward-users', params.pageNo, params.pageSize, params.keyword],
@@ -130,6 +138,10 @@ export function ForwardUsersPage() {
               <CalendarIcon className="size-4" />
               修改到期时间
             </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setResourcesFor(row.original)}>
+              <KeyRoundIcon className="size-4" />
+              资源授权
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       ),
@@ -138,7 +150,10 @@ export function ForwardUsersPage() {
 
   return (
     <>
-      <PageHeader title="转发用户" description="使用转发服务的用户，及其套餐与流量消耗。" />
+      <PageHeader
+        title="转发用户"
+        description="使用转发服务的用户，及其套餐、流量消耗与可用的节点链路。「资源授权」决定用户端能看到什么。"
+      />
 
       <Toolbar
         keyword={params.keyword}
@@ -165,6 +180,7 @@ export function ForwardUsersPage() {
       <UserPlanDialog user={planFor} onClose={() => setPlanFor(undefined)} />
       <AssociatePlanDialog user={associateFor} onClose={() => setAssociateFor(undefined)} />
       <EditExpirationDialog user={expirationFor} onClose={() => setExpirationFor(undefined)} />
+      <UserResourcesDialog user={resourcesFor} onClose={() => setResourcesFor(undefined)} />
     </>
   )
 }

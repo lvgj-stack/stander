@@ -134,6 +134,12 @@ type PlanTo struct {
 	*entity.TrafficPlan
 }
 
+// GetUserResourcesResp lists the nodes and chains one user may build rules on.
+type GetUserResourcesResp struct {
+	NodeIds  []int64
+	ChainIds []int64
+}
+
 type UserTo struct {
 	*entity.User
 	UsedTraffic int64

@@ -113,6 +113,19 @@ sequenceDiagram
 | `service.requireSuperAdmin` | 只有管理员能做的领域动作：`ListUsers`、`EditUser`、`ListPlans`、`AssociatePlan`、`AddChainGroup`、`DelChainGroup` |
 | 各动作自己的归属检查 | `checkRuleOwnership`（`AddRule` / `ModifyRule` / `ModifyRules` / `DelRule` / `TestRule`）、`checkUserNodePermission`、`checkUserChainPermission`、`scopeToCaller` |
 
+### 资源授权跟被删掉的权限树不是一回事
+
+`user_role_node_mappings` / `user_role_chain_mappings` 决定一个账号能用哪些节点
+和链路。用户端的每一次读写都落在这上面：`ListNode` / `ListChain` 按它过滤，
+`AddRule` 按它拒绝没授权的 id。
+
+它跟删掉的 `permission` 表方向相反——那张表决定"菜单上显示什么"，路由根本不读它；
+这两张表决定"能碰哪些真实资源"，service 层一直在强制执行。
+
+管理端在 转发用户 › 资源授权 里维护它（`GetUserResources` / `SetUserResources`）。
+在这个界面出现之前，只有"用户自己调 AddNode"会写这种行；而节点页现在是管理端的，
+所以普通账号的用户端会永远是空的——授权界面是这次必须补上的一环，不是可选项。
+
 把路由级的那层放在路由表里是有意的：读 `api/admin_route.go` 就能看出哪些接口属
 于哪个端，不用去翻每个 handler。
 

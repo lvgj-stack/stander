@@ -8,6 +8,7 @@ import (
 	"gorm.io/gen"
 
 	"github.com/lvgj-stack/stander/internal/model/dal"
+	"github.com/lvgj-stack/stander/internal/model/entity"
 	"github.com/lvgj-stack/stander/internal/service/req"
 	"github.com/lvgj-stack/stander/internal/service/resp"
 )
@@ -151,4 +152,110 @@ func EditUser(ctx context.Context, r *req.EditUserReq) (*resp.EmptyResp, error) 
 
 	return &resp.EmptyResp{}, nil
 
+}
+
+// GetUserResources lists the nodes and chains one user is allowed to build
+// rules on.
+//
+// These are the `user_role_node_mappings` / `user_role_chain_mappings` rows
+// keyed by user id. Rows keyed by role code are deliberately left out: those
+// are what AddNode writes for a node an administrator created, they are not
+// held by any particular account, and showing them here would invite an
+// administrator to "revoke" a row this action cannot address.
+func GetUserResources(ctx context.Context, r *req.GetUserResourcesReq) (*resp.GetUserResourcesResp, error) {
+	if err := requireSuperAdmin(ctx); err != nil {
+		return nil, err
+	}
+
+	res := &resp.GetUserResourcesResp{NodeIds: []int64{}, ChainIds: []int64{}}
+	if err := dal.UserRoleNodeMapping.WithContext(ctx).
+		Select(dal.UserRoleNodeMapping.NodeID).
+		Where(dal.UserRoleNodeMapping.UserID.Eq(r.UserId)).
+		Scan(&res.NodeIds); err != nil {
+		return nil, err
+	}
+	if err := dal.UserRoleChainMapping.WithContext(ctx).
+		Select(dal.UserRoleChainMapping.ChainID).
+		Where(dal.UserRoleChainMapping.UserID.Eq(r.UserId)).
+		Scan(&res.ChainIds); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+// SetUserResources replaces which nodes and chains a user may build rules on.
+//
+// This is what makes the user portal usable at all. Every read and write on
+// that side is scoped to these rows — ListNode and ListChain filter on them,
+// checkUserNodePermission and checkUserChainPermission gate AddRule on them —
+// and the only other thing that ever created one was AddNode run by the user
+// themselves, which is now an administrator's screen. Without this action a
+// forwarding account sees an empty node list forever and can create nothing.
+//
+// It is emphatically not the permission tree that was removed: that decided
+// which menu entries a role saw, in a table the router never consulted. This
+// decides which rows of real infrastructure one account may touch, and the
+// service layer has always enforced it.
+func SetUserResources(ctx context.Context, r *req.SetUserResourcesReq) (*resp.EmptyResp, error) {
+	if err := requireSuperAdmin(ctx); err != nil {
+		return nil, err
+	}
+
+	// Reject unknown ids rather than storing a grant to a node that does not
+	// exist: the row would sit there looking like access to whatever id is
+	// reused next.
+	if err := allExist(ctx, r.NodeIds, r.ChainIds); err != nil {
+		return nil, err
+	}
+
+	err := dal.Q.Transaction(func(tx *dal.Query) error {
+		// Only this user's own rows. The role-code rows an administrator's
+		// AddNode wrote belong to the role, not to anyone here.
+		if _, err := tx.UserRoleNodeMapping.WithContext(ctx).
+			Where(tx.UserRoleNodeMapping.UserID.Eq(r.UserId)).
+			Delete(&entity.UserRoleNodeMapping{}); err != nil {
+			return err
+		}
+		if _, err := tx.UserRoleChainMapping.WithContext(ctx).
+			Where(tx.UserRoleChainMapping.UserID.Eq(r.UserId)).
+			Delete(&entity.UserRoleChainMapping{}); err != nil {
+			return err
+		}
+		for _, id := range r.NodeIds {
+			if err := tx.UserRoleNodeMapping.WithContext(ctx).Create(&entity.UserRoleNodeMapping{
+				UserID: &r.UserId,
+				NodeID: int32(id),
+			}); err != nil {
+				return err
+			}
+		}
+		for _, id := range r.ChainIds {
+			if err := tx.UserRoleChainMapping.WithContext(ctx).Create(&entity.UserRoleChainMapping{
+				UserID:  &r.UserId,
+				ChainID: int32(id),
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &resp.EmptyResp{}, nil
+}
+
+// allExist reports an error naming the first id that has no row behind it.
+func allExist(ctx context.Context, nodeIds, chainIds []int64) error {
+	for _, id := range nodeIds {
+		if _, err := dal.Node.WithContext(ctx).Where(dal.Node.ID.Eq(id)).First(); err != nil {
+			return fmt.Errorf("节点 %d 不存在: %w", id, err)
+		}
+	}
+	for _, id := range chainIds {
+		if _, err := dal.Chain.WithContext(ctx).Where(dal.Chain.ID.Eq(id)).First(); err != nil {
+			return fmt.Errorf("链路 %d 不存在: %w", id, err)
+		}
+	}
+	return nil
 }

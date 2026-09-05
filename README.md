@@ -50,6 +50,11 @@ go run . server
 分流点只有一条：`identity.Principal.IsSuperAdmin()`——后端本来也只有这一条授权
 边界，所以端不多不少正好两个。角色除了决定进哪个端，不再有别的作用。
 
+用户端能看到哪些节点和链路，由管理端的 转发用户 › 资源授权 决定
+（`user_role_node_mappings` / `user_role_chain_mappings`）。这是资源授权，跟被删
+掉的菜单权限树不是一回事：那张表决定菜单显示什么，这两张表决定能碰哪些真实资源，
+service 层一直在强制执行。
+
 菜单和路由都在前端代码里（`web/src/routes/index.tsx` 加两个 nav 常量）。加页面
 不需要往数据库里补记录；早先那套由 `permission` 表在运行时生成菜单和 tab 的机制
 已经删掉，已有的库用 `sql/migrate-2026-09-05-two-sides.sql` 清理。

@@ -166,6 +166,20 @@ type EditUserReq struct {
 	ExpirationTime *time.Time
 }
 
+type GetUserResourcesReq struct {
+	UserId int32 `vd:"$!=0"`
+}
+
+// SetUserResourcesReq replaces the whole grant set for one user, so an empty
+// list means "revoke everything" rather than "leave it alone". A partial
+// update would need a separate add/remove pair, and the screen that drives
+// this submits the full selection anyway.
+type SetUserResourcesReq struct {
+	UserId   int32 `vd:"$!=0"`
+	NodeIds  []int64
+	ChainIds []int64
+}
+
 type EmptyReq struct {
 }
 
