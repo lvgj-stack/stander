@@ -175,10 +175,30 @@ agent 跑在实际做端口转发的机器上。绝大多数情况下那是集�
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lvgj-stack/stander/main/scripts/install.sh \
-  | bash -s -- <controller-addr:8123> <node-key>
+  | bash -s -- <controller-addr:8123> <node-key> [额外 agent 参数...]
 ```
 
-脚本会装二进制并生成 systemd unit（`ExecStart` 是 `stander-agent agent -a ... -k ...`）。
+脚本会：按机器架构（amd64/arm64）从 GitHub Release 下载对应二进制、用发布时生成的
+`SHA256SUMS` 校验、跑一次 `version` 确认能执行，再装成 systemd 服务
+（`ExecStart` 是 `stander-agent agent -a ... -k ...`）。二进制由 `release.yml`
+在打 tag 时构建发布。
+
+常用变体：
+
+```bash
+# 装指定版本
+STANDER_VERSION=v1.2.0 bash -s -- <addr> <key>       # 管道形式同理
+# 内网镜像 / 离线安装：从自己的地址取 stander_linux_<arch> 和 SHA256SUMS
+STANDER_ASSET_BASE=https://mirror.internal/stander bash scripts/install.sh <addr> <key>
+# 卸载
+sudo scripts/install.sh uninstall
+```
+
+重复执行是安全的：二进制没变就不重装、不无谓重启；只有版本或参数变了才会重启服务。
+
+需要 gost 数据面时（agent 带 `--enable-gost`），在同一台机器上跑
+`sudo scripts/install_gost.sh`。它把 gost 的 API 固定在 `127.0.0.1:19123`——
+这个地址在 `internal/client/gost.go` 里是写死的，agent 就按这个连。
 
 ### 为什么 agent 不是 DaemonSet
 

@@ -105,6 +105,11 @@ GOPROXY=https://goproxy.cn,direct scripts/e2e-kind.sh
 **两个镜像永远同一个 tag。** 控制台和它调用的 API 版本对不上，不是一个值得支持的
 状态。tag 来自版本标签（`v1.2.3` → `1.2.3`），手动触发时用 commit 短 SHA。
 
+**binaries** — 只在打 tag 时跑（`workflow_dispatch` 手动部署没有对应的 Release
+可以挂产物）。交叉编译 `stander_linux_amd64` 和 `stander_linux_arm64`，生成
+`SHA256SUMS`，用 `gh release upload --clobber` 挂到这个 tag 的 Release 上。
+`scripts/install.sh` 就按机器架构从这里下载并校验，所以产物名字要和脚本对齐。
+
 **deploy** — 把 overlay 的 `images` 块改写成刚推的镜像，渲染、`kubectl diff`
 展示变更、apply、然后等三个 Deployment 全部 rollout 完成。任何一个没起来就
 `rollout undo` 回滚并让 job 失败。

@@ -92,6 +92,49 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
 
+  binaries:
+    name: publish agent binaries
+    runs-on: ubuntu-latest
+    # Only tag pushes create a GitHub Release to attach assets to; a manual
+    # workflow_dispatch deploy has no release to upload into.
+    if: github.ref_type == 'tag'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+
+      - name: Cross-compile the agent binary
+        # scripts/install.sh downloads these by exact name; keep the two in
+        # step. Static (CGO off) so they run on any glibc/musl VPS.
+        run: |
+          mkdir -p dist
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath \
+              -ldflags="-s -w \
+                -X github.com/lvgj-stack/stander/cmd.version=${GITHUB_REF_NAME#v} \
+                -X github.com/lvgj-stack/stander/cmd.commit=${GITHUB_SHA::7}" \
+              -o "dist/stander_linux_${arch}" .
+          done
+          ( cd dist && sha256sum stander_linux_* > SHA256SUMS )
+          cat dist/SHA256SUMS
+
+      - name: Attach them to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # --clobber so re-running the workflow on the same tag replaces the
+        # assets instead of failing on "already exists".
+        run: |
+          gh release upload "$GITHUB_REF_NAME" \
+            dist/stander_linux_amd64 \
+            dist/stander_linux_arm64 \
+            dist/SHA256SUMS \
+            --clobber
+
   deploy:
     name: deploy to kubernetes
     runs-on: ubuntu-latest
