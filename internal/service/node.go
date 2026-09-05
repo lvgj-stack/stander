@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/cloudwego/hertz/pkg/common/hlog"
 	"github.com/google/uuid"
@@ -10,6 +11,7 @@ import (
 	"gorm.io/gen"
 	"gorm.io/gorm"
 
+	"github.com/lvgj-stack/stander/internal/apperr"
 	"github.com/lvgj-stack/stander/internal/common"
 	"github.com/lvgj-stack/stander/internal/config"
 	"github.com/lvgj-stack/stander/internal/identity"
@@ -39,6 +41,36 @@ func checkUserNodePermission(ctx context.Context, nodeIds ...int64) error {
 	return nil
 }
 
+// validateAddNode checks a creation request and returns the node name with the
+// whitespace around it removed.
+//
+// The rules live here rather than in `vd:` tags on the request struct, which is
+// a deliberate departure from the rest of req.Request. A tag only runs when a
+// request is bound over HTTP, so a table-driven test cannot reach one without
+// standing up a server — and a name of only spaces, a zero rate and an unknown
+// node type are exactly the boundaries that want a table. Writing the rules in
+// both places instead would let the two drift.
+//
+// The rate carried no tag at all: until this existed, the admin console's form
+// was the only thing between a typo and a node whose traffic never counts.
+func validateAddNode(r *req.AddNodeReq) (string, error) {
+	name := strings.TrimSpace(r.NodeName)
+	if name == "" {
+		return "", apperr.Invalidf("节点名称不能为空")
+	}
+	switch r.NodeType {
+	case "inbound", "outbound":
+	default:
+		return "", apperr.Invalidf("节点类型只能是 inbound 或 outbound，收到的是 %q", r.NodeType)
+	}
+	// Zero is not "no multiplier" but traffic that never counts, and a negative
+	// one hands quota back for using the node.
+	if r.Rate <= 0 {
+		return "", apperr.Invalidf("流量倍率必须大于 0")
+	}
+	return name, nil
+}
+
 // AddNode registers a node and returns the key its agent authenticates with.
 //
 // Administrators only. A node is shared infrastructure, and the branch this
@@ -58,10 +90,14 @@ func AddNode(ctx context.Context, r *req.AddNodeReq) (*resp.AddNodeResp, error) 
 	if err := requireSuperAdmin(ctx); err != nil {
 		return nil, err
 	}
+	name, err := validateAddNode(r)
+	if err != nil {
+		return nil, err
+	}
 
 	key := uuid.New().String()
 	if err := dal.Q.Node.WithContext(ctx).Create(&entity.Node{
-		NodeName: &r.NodeName,
+		NodeName: &name,
 		Key:      &key,
 		NodeType: &r.NodeType,
 		Rate:     r.Rate,

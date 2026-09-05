@@ -9,6 +9,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/google/uuid"
 
+	"github.com/lvgj-stack/stander/internal/apperr"
 	"github.com/lvgj-stack/stander/internal/identity"
 	"github.com/lvgj-stack/stander/internal/service/req"
 )
@@ -20,6 +21,37 @@ type capturedArg struct{ value driver.Value }
 func (c *capturedArg) Match(v driver.Value) bool {
 	c.value = v
 	return true
+}
+
+// expectNodeInsert declares the single insert that creating a node issues, and
+// returns the captured node key.
+//
+// The arguments are positional and cover every column of entity.Node, so
+// regenerating the entity after a schema change (`stander gen`) fails the tests
+// using this on the argument count. That is the intent rather than a cost: what
+// creation writes is the thing under test, and a new column changes it.
+func expectNodeInsert(mock sqlmock.Sqlmock, name, nodeType string) *capturedArg {
+	key := &capturedArg{}
+	mock.ExpectBegin()
+	mock.ExpectExec("INSERT INTO `nodes`").WithArgs(
+		sqlmock.AnyArg(), // created_at
+		sqlmock.AnyArg(), // updated_at
+		sqlmock.AnyArg(), // deleted_at
+		name,             // node_name
+		sqlmock.AnyArg(), // ip
+		sqlmock.AnyArg(), // manager_ip
+		sqlmock.AnyArg(), // port
+		key,              // key
+		sqlmock.AnyArg(), // status
+		nodeType,         // node_type
+		sqlmock.AnyArg(), // ipv4
+		sqlmock.AnyArg(), // ipv6
+		sqlmock.AnyArg(), // rate
+		sqlmock.AnyArg(), // protocol
+		sqlmock.AnyArg(), // iepl
+	).WillReturnResult(sqlmock.NewResult(7, 1))
+	mock.ExpectCommit()
+	return key
 }
 
 // A forwarding account holds a valid token against this API, so the absence of
@@ -46,34 +78,9 @@ func TestAddNodeRefusesANonAdmin(t *testing.T) {
 // test. Those are the two statements this action used to issue: the second
 // write had no transaction around it, so its failure left a node nobody owned,
 // and the re-read discarded its error and then dereferenced a nil row.
-//
-// The arguments are positional and cover every column of entity.Node, so
-// regenerating the entity after a schema change (`stander gen`) fails this test
-// on the argument count. That is the intent rather than a cost: what creation
-// writes is the thing under test, and a new column changes it.
 func TestAddNodeWritesOneRowAndReturnsItsKey(t *testing.T) {
 	mock := newMockDB(t)
-
-	key := &capturedArg{}
-	mock.ExpectBegin()
-	mock.ExpectExec("INSERT INTO `nodes`").WithArgs(
-		sqlmock.AnyArg(), // created_at
-		sqlmock.AnyArg(), // updated_at
-		sqlmock.AnyArg(), // deleted_at
-		"hk-01",          // node_name
-		sqlmock.AnyArg(), // ip
-		sqlmock.AnyArg(), // manager_ip
-		sqlmock.AnyArg(), // port
-		key,              // key
-		sqlmock.AnyArg(), // status
-		"inbound",        // node_type
-		sqlmock.AnyArg(), // ipv4
-		sqlmock.AnyArg(), // ipv6
-		sqlmock.AnyArg(), // rate
-		sqlmock.AnyArg(), // protocol
-		sqlmock.AnyArg(), // iepl
-	).WillReturnResult(sqlmock.NewResult(7, 1))
-	mock.ExpectCommit()
+	key := expectNodeInsert(mock, "hk-01", "inbound")
 
 	got, err := AddNode(adminCtx(), &req.AddNodeReq{NodeName: "hk-01", NodeType: "inbound", Rate: 1.5})
 	if err != nil {
@@ -106,6 +113,78 @@ func TestAddNodePropagatesTheWriteError(t *testing.T) {
 		t.Fatal("expected the insert error to propagate")
 	}
 	// Also that the failed write was rolled back rather than left open.
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet expectations: %v", err)
+	}
+}
+
+// The rules a creation request has to satisfy, in one table. This table being
+// able to reach them at all is why they are not `vd:` tags; see validateAddNode.
+func TestValidateAddNode(t *testing.T) {
+	tests := []struct {
+		name     string
+		req      req.AddNodeReq
+		wantName string
+		wantErr  bool
+	}{
+		{"a valid request", req.AddNodeReq{NodeName: "hk-01", NodeType: "inbound", Rate: 1}, "hk-01", false},
+		{"outbound is a node type too", req.AddNodeReq{NodeName: "hk-01", NodeType: "outbound", Rate: 1}, "hk-01", false},
+		{"a fractional rate is fine", req.AddNodeReq{NodeName: "hk-01", NodeType: "inbound", Rate: 0.1}, "hk-01", false},
+		{"surrounding space is trimmed", req.AddNodeReq{NodeName: "  hk-01  ", NodeType: "inbound", Rate: 1}, "hk-01", false},
+		{"an empty name", req.AddNodeReq{NodeName: "", NodeType: "inbound", Rate: 1}, "", true},
+		{"a name of only spaces", req.AddNodeReq{NodeName: "   ", NodeType: "inbound", Rate: 1}, "", true},
+		// A zero rate is not "no multiplier": it is traffic that never counts.
+		{"a zero rate", req.AddNodeReq{NodeName: "hk-01", NodeType: "inbound", Rate: 0}, "", true},
+		{"a negative rate", req.AddNodeReq{NodeName: "hk-01", NodeType: "inbound", Rate: -1}, "", true},
+		{"an unknown node type", req.AddNodeReq{NodeName: "hk-01", NodeType: "relay", Rate: 1}, "", true},
+		{"an empty node type", req.AddNodeReq{NodeName: "hk-01", NodeType: "", Rate: 1}, "", true},
+		{"node types are not case-insensitive", req.AddNodeReq{NodeName: "hk-01", NodeType: "Inbound", Rate: 1}, "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			name, err := validateAddNode(&tt.req)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("validateAddNode(%+v) = nil, want an error", tt.req)
+				}
+				// The caller sent something wrong; this is not a server fault.
+				if kind := apperr.KindOf(err); kind != apperr.InvalidArgument {
+					t.Errorf("error kind = %v, want InvalidArgument", kind)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("validateAddNode(%+v) = %v, want nil", tt.req, err)
+			}
+			if name != tt.wantName {
+				t.Errorf("name = %q, want %q", name, tt.wantName)
+			}
+		})
+	}
+}
+
+// The rule has to be applied, not merely to exist: a rejected request must not
+// reach the table. No expectations are declared, so any statement issued fails
+// the call and the assertion below would see that instead.
+func TestAddNodeRejectsABadRequestBeforeTheDatabase(t *testing.T) {
+	newMockDB(t)
+
+	_, err := AddNode(adminCtx(), &req.AddNodeReq{NodeName: "  ", NodeType: "inbound", Rate: 1})
+	if apperr.KindOf(err) != apperr.InvalidArgument {
+		t.Fatalf("AddNode with a blank name = %v, want an InvalidArgument error", err)
+	}
+}
+
+// And the trimmed name is the one that reaches the table. Validating in a pure
+// function proves the trim happens; only this proves the action stores it.
+func TestAddNodeStoresTheTrimmedName(t *testing.T) {
+	mock := newMockDB(t)
+	expectNodeInsert(mock, "hk-01", "inbound")
+
+	if _, err := AddNode(adminCtx(), &req.AddNodeReq{NodeName: "  hk-01  ", NodeType: "inbound", Rate: 1}); err != nil {
+		t.Fatalf("AddNode: %v", err)
+	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("unmet expectations: %v", err)
 	}
