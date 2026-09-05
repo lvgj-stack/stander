@@ -39,45 +39,37 @@ func checkUserNodePermission(ctx context.Context, nodeIds ...int64) error {
 	return nil
 }
 
+// AddNode registers a node and returns the key its agent authenticates with.
+//
+// Administrators only. A node is shared infrastructure, and the branch this
+// replaces let a forwarding account create one and, in the same call, write
+// itself the user_role_node_mappings row granting access to it — which is the
+// grant 转发用户 › 资源授权 exists to hand out, and the one thing a user must
+// not issue to themselves. The user portal has no button for it; that never
+// made it unreachable, because both sides are served by the same API.
+//
+// An administrator needs no mapping row (IsSuperAdmin bypasses every
+// per-resource check), so creation is now a single insert. The two writes it
+// replaces had no transaction around them, so a failed second one left a node
+// with no owner and a retry left another; between them sat a re-read of the
+// row by key whose error was discarded and whose nil result was dereferenced
+// immediately.
 func AddNode(ctx context.Context, r *req.AddNodeReq) (*resp.AddNodeResp, error) {
-	uid := uuid.New().String()
-	if !identity.FromContext(ctx).IsSuperAdmin() {
-		if err := dal.Q.Node.WithContext(ctx).Create(&entity.Node{
-			NodeName: &r.NodeName,
-			Key:      &uid,
-			NodeType: &r.NodeType,
-			Rate:     r.Rate,
-		}); err != nil {
-			return nil, err
-		}
-		node, _ := dal.Node.WithContext(ctx).Where(dal.Node.Key.Eq(uid)).First()
-		userId := identity.FromContext(ctx).UserID
-		if err := dal.UserRoleNodeMapping.WithContext(ctx).Create(&entity.UserRoleNodeMapping{
-			UserID: &userId,
-			NodeID: int32(node.ID),
-		}); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := dal.Q.Node.WithContext(ctx).Create(&entity.Node{
-			NodeName: &r.NodeName,
-			Key:      &uid,
-			NodeType: &r.NodeType,
-			Rate:     r.Rate,
-		}); err != nil {
-			return nil, err
-		}
-		node, _ := dal.Node.WithContext(ctx).Where(dal.Node.Key.Eq(uid)).First()
-		roleCode := identity.FromContext(ctx).RoleCode
-		if err := dal.UserRoleNodeMapping.WithContext(ctx).Create(&entity.UserRoleNodeMapping{
-			RoleCode: &roleCode,
-			NodeID:   int32(node.ID),
-		}); err != nil {
-			return nil, err
-		}
+	if err := requireSuperAdmin(ctx); err != nil {
+		return nil, err
 	}
 
-	return &resp.AddNodeResp{Key: uid}, nil
+	key := uuid.New().String()
+	if err := dal.Q.Node.WithContext(ctx).Create(&entity.Node{
+		NodeName: &r.NodeName,
+		Key:      &key,
+		NodeType: &r.NodeType,
+		Rate:     r.Rate,
+	}); err != nil {
+		return nil, err
+	}
+
+	return &resp.AddNodeResp{Key: key}, nil
 }
 
 func DelNode(ctx context.Context, r *req.DelNodeReq) (*resp.DelNodeResp, error) {
