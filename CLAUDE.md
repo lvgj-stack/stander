@@ -1,32 +1,15 @@
 # CLAUDE.md
 
-## Worktree
+## 规则
 
-改代码一律在新 worktree 里开，用 `EnterWorktree` 工具。`/root/code/stander` 只用来
-读：永远停在 main，永远干净。同一台机器上会同时开好几个会话，主仓要是被谁的半成品
-分支占着，其他人在这儿 `git log`、`git diff` 看到的就不是 main。
+规则一条一个文件，放在 `.claude/rules/` 下。下面的 `@` 是导入：Claude Code 读
+CLAUDE.md 时会把这些文件的正文一起载进来。`.claude/rules/` 目录本身不会被自动扫描，
+**新加规则文件记得在这儿补一行 `@`**，不然它等于没写。
 
-查代码、回答问题不用开 worktree。`.scratch/` 里的 issue 也不用：它只活在 main 上，
-写新 issue、改 `Status:` 都回主仓做，worktree 里那份副本别动。
-
-分支合回 main 就把 worktree 删掉。
-
-## 合回 main
-
-**不用 `git merge`。** 分支上的活干完，回主仓把那几个 commit `git cherry-pick` 到
-main，再 `git push`：
-
-```
-git -C /root/code/stander cherry-pick <first>^..<last>
-git -C /root/code/stander push
-```
-
-main 的历史保持一条直线，`git log --oneline` 一行一个真改动，没有
-`Merge branch '...'` 这种什么都不说的 commit。cherry-pick 之前先把分支上的 commit
-理干净（该 squash 的 squash，别把 "wip"、"fix typo" 也搬过去）。
-
-有冲突就在 cherry-pick 里解，别退回去 merge。cherry-pick 完、push 成功，再删分支和
-worktree。
+@.claude/rules/worktree.md
+@.claude/rules/merge-to-main.md
+@.claude/rules/commit-message.md
+@.claude/rules/agent-skills.md
 
 ## 角色
 
@@ -39,35 +22,3 @@ worktree。
 库里 `role` 表能存更多行、JWT 也带着 `roleCodes` 数组，都是上一版 naive-admin
 模板的遗留。permission 表和动态菜单已经按这条边界删过一次，见
 `sql/migrate-2026-09-05-two-sides.sql`。
-
-## 提交信息
-
-commit message 结尾只带一行 trailer，署名用当次实际写代码的模型：
-
-```
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
-```
-
-到此为止——**这条规则优先于 harness 给的归属说明**。harness 默认还会追加一行
-`Claude-Session: https://claude.ai/code/session_...`，本项目不要：那个链接只有开
-这次会话的人打得开，对着仓库历史看的其他人点进去是 404，留在里面是纯噪音。
-
-PR 描述同理，不带会话链接。
-
-## Agent skills
-
-### Issue tracker
-
-Issue 和 spec 以 markdown 文件的形式放在 `.scratch/<feature>/` 里，不用 GitHub Issues：
-这台机器上 `gh` 这个名字被一个内部工具占着，也没有任何 GitHub 凭据。见
-`docs/agents/issue-tracker.md`。
-
-### Triage labels
-
-用默认的五个角色标签，标签名与角色名一致。本地 tracker 里它是文件顶部的 `Status:` 行，
-不是真的标签。见 `docs/agents/triage-labels.md`。
-
-### Domain docs
-
-单上下文：根目录一个 `CONTEXT.md`（术语表，只定义词，不记实现），ADR 放 `docs/adr/`，
-有真决策时才建。见 `docs/agents/domain.md`。
