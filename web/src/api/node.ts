@@ -1,4 +1,4 @@
-import type { Chain, Node, Page } from '@/types/api'
+import type { AgentInstallInfo, Chain, Node, Page } from '@/types/api'
 
 import { action } from './client'
 
@@ -36,6 +36,14 @@ export const deleteNode = (id: number) => action<number>('node', 'DeleteNode', {
 
 export const listNodeChains = (nodeId: number) =>
   action<Chain[]>('node', 'ListNodeChainRelationShips', { NodeId: nodeId })
+
+/**
+ * The deployment-wide half of a node's install command: where an agent dials
+ * back to, and which installer to curl. The node key is the other half and
+ * comes from `addNode` or the node listing.
+ */
+export const getAgentInstallInfo = () =>
+  action<AgentInstallInfo>('node', 'GetAgentInstallInfo', {})
 
 /** Ids of the nodes the signed-in user is allowed to act on. */
 export const getNodePermissions = () => action<number[]>('node', 'GetNodePermissions', {})

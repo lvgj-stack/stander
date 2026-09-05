@@ -32,6 +32,10 @@ services:
       STANDER_DATABASE_DBNAME: stander
       STANDER_ADMIN_JWTSIGNINGKEY: dev-only-not-a-real-key
       STANDER_SERVER_LOGLEVEL: "2"
+      # Left unset on purpose: the console is on :8080 and the controller on
+      # :8123 of the same host, which is exactly the case the server's own
+      # guess (request host + Server.Port) gets right. A real deployment behind
+      # a proxy has to set it — see docs/configuration.md.
     command: ["server", "--pprof-addr", ""]
     # stander fails fast when the database is unreachable; restarting is how it
     # recovers, the same way a Kubernetes Pod would.

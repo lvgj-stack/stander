@@ -7,6 +7,11 @@ Server:
   Timezone: Asia/Shanghai
   # 后台任务的执行间隔（秒）。
   WorkerIntervalSeconds: 30
+  # agent 回连的对外地址，控制台生成安装命令时填进 `-a`。留空则按本次请求的
+  # Host 加上面的 Port 推测——单机部署够用，前面挡了 nginx/Ingress 就要显式配。
+  # ControllerAddr: controller.example.com:8123
+  # 安装命令 curl 的脚本地址。留空用 GitHub 上发布的 scripts/install.sh。
+  # InstallScriptURL: https://mirror.internal/stander/install.sh
 EnableRelay: False
 Database:
   Username: root

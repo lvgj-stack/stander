@@ -38,6 +38,16 @@ go run . server
 配置文件是可选的，所有配置项都能用 `STANDER_` 前缀的环境变量提供，
 详见 [configuration.md](docs/configuration.md)。
 
+### 接一个转发节点
+
+管理端 › 节点 › 新增节点，创建完控制台直接给出一条安装命令，在目标机器上粘贴
+执行即可——脚本会下载 agent、写好 systemd 服务并启动，节点自己就连回来了。已有
+节点在行操作菜单里选 安装命令 也能再拿一次。
+
+命令里的控制面地址来自 `Server.ControllerAddr`；部署在 nginx/Ingress 后面时要
+配上它，否则服务端只能靠请求的 Host 去猜。详见
+[deployment.md](docs/deployment.md#agent)。
+
 ## 两个端
 
 控制台是一份静态站点，里面两套写死的路由，登录后按角色分流：

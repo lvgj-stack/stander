@@ -480,3 +480,32 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
     "originUrl":"/stander/user"
 }
 ```
+
+###  节点-安装信息 post : /stander/node?Action=GetAgentInstallInfo
+
+控制台拼装节点安装命令要的那一半：agent 该回连哪里、安装脚本从哪下。另一半是
+节点密钥，来自 `AddNode` 的返回或节点列表。
+
+命令本身在前端拼（`web/src/lib/install-command.ts`），因为地址在弹窗里可以改，
+改完要立刻看到新命令，不值得为此多跑一趟。
+
+`controllerAddr` 优先取 `Server.ControllerAddr`；没配就拿本次请求的 `Host` 去掉
+端口、接上 `Server.Port`，这只是个推测值，前端允许运维改。
+
+**request**
+```
+{}
+```
+
+**response**
+```
+{
+    "code":0,
+    "message":"OK",
+    "data":{
+        "controllerAddr":"controller.example.com:8123",
+        "scriptUrl":"https://raw.githubusercontent.com/lvgj-stack/stander/main/scripts/install.sh"
+    },
+    "originUrl":"/stander/node"
+}
+```

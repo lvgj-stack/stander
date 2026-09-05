@@ -48,6 +48,17 @@ export interface Node {
   iepl: number
 }
 
+/**
+ * What the console needs, besides the node key, to render the command that
+ * installs an agent. `controllerAddr` is the backend's best guess when the
+ * deployment has not configured `Server.ControllerAddr`, so the dialog lets an
+ * operator correct it.
+ */
+export interface AgentInstallInfo {
+  controllerAddr: string
+  scriptUrl: string
+}
+
 export interface Chain {
   id: number
   createdAt: string | null

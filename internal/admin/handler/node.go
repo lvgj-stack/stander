@@ -6,6 +6,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 
 	"github.com/lvgj-stack/stander/internal/service"
+	"github.com/lvgj-stack/stander/internal/service/req"
 )
 
 var Node = &node{}
@@ -55,6 +56,20 @@ func (node) Handle(c context.Context, ctx *app.RequestContext) {
 			return
 		}
 		Resp.Succ(ctx, res.Chains)
+	case "GetAgentInstallInfo":
+		// Also needs the Host the console was reached at, which is a transport
+		// fact rather than part of the request body — see the service comment.
+		var r req.EmptyReq
+		if err := ctx.BindAndValidate(&r); err != nil {
+			Resp.Err(ctx, 20001, err.Error())
+			return
+		}
+		res, err := service.GetAgentInstallInfo(c, &r, string(ctx.Request.Host()))
+		if err != nil {
+			Resp.Err(ctx, 20001, err.Error())
+			return
+		}
+		Resp.Succ(ctx, res)
 	case "GetNodePermissions":
 		res, err := call(c, ctx, service.GetNodePermissions)
 		if err != nil {

@@ -1,8 +1,14 @@
 import { useState } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import type { ColumnDef } from '@tanstack/react-table'
-import { CopyIcon, LinkIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react'
-import { toast } from 'sonner'
+import {
+  LinkIcon,
+  MoreHorizontalIcon,
+  PencilIcon,
+  PlusIcon,
+  TerminalIcon,
+  Trash2Icon,
+} from 'lucide-react'
 
 import { deleteNode, listNodeChains, listNodes } from '@/api/node'
 import { ConfirmDialog } from '@/components/confirm-dialog'
@@ -31,6 +37,7 @@ import { formatTime, orEmpty } from '@/lib/format'
 import type { Node } from '@/types/api'
 
 import { NodeFormDialog } from './node-form-dialog'
+import { NodeInstallDialog, type NodeInstallTarget } from './node-install-dialog'
 
 /** Renders the node's transport, which the entity stores as 0 = TLS, 1 = TCP. */
 function protocolLabel(protocol: number): string {
@@ -42,7 +49,7 @@ export function NodesPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Node | undefined>()
   const [deleting, setDeleting] = useState<Node | undefined>()
-  const [issuedKey, setIssuedKey] = useState<string | null>(null)
+  const [installing, setInstalling] = useState<NodeInstallTarget | null>(null)
   const [chainsOf, setChainsOf] = useState<Node | undefined>()
 
   const query = useQuery({
@@ -149,6 +156,19 @@ export function NodesPage() {
               <PencilIcon className="size-4" />
               编辑
             </DropdownMenuItem>
+            {row.original.key ? (
+              <DropdownMenuItem
+                onSelect={() =>
+                  setInstalling({
+                    nodeName: row.original.nodeName,
+                    nodeKey: row.original.key!,
+                  })
+                }
+              >
+                <TerminalIcon className="size-4" />
+                安装命令
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuItem onSelect={() => setChainsOf(row.original)}>
               <LinkIcon className="size-4" />
               查看链路
@@ -203,7 +223,7 @@ export function NodesPage() {
         open={formOpen}
         onOpenChange={setFormOpen}
         node={editing}
-        onCreated={setIssuedKey}
+        onCreated={({ key, preferIPv6 }) => setInstalling({ nodeKey: key, issued: true, preferIPv6 })}
       />
 
       <ConfirmDialog
@@ -216,53 +236,9 @@ export function NodesPage() {
         onConfirm={() => deleting && removeMutation.mutate(deleting)}
       />
 
-      <IssuedKeyDialog nodeKey={issuedKey} onClose={() => setIssuedKey(null)} />
+      <NodeInstallDialog target={installing} onClose={() => setInstalling(null)} />
       <NodeChainsDialog node={chainsOf} onClose={() => setChainsOf(undefined)} />
     </>
-  )
-}
-
-/**
- * Shows the key a freshly created node was issued.
- *
- * The backend returns it exactly once, at creation; it is not readable
- * afterwards. So this dialog says so plainly rather than letting someone
- * assume they can come back for it.
- */
-function IssuedKeyDialog({ nodeKey, onClose }: { nodeKey: string | null; onClose: () => void }) {
-  return (
-    <Dialog open={Boolean(nodeKey)} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>节点密钥</DialogTitle>
-          <DialogDescription>
-            agent 启动时用这个密钥连接控制面。它只显示这一次，关闭后无法再次查看。
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3">
-          <code className="block break-all rounded-md bg-muted px-3 py-2 text-sm">{nodeKey}</code>
-          <p className="text-xs text-muted-foreground">启动命令：</p>
-          <code className="block break-all rounded-md bg-muted px-3 py-2 text-xs">
-            stander agent -a &lt;控制面地址&gt; -k {nodeKey}
-          </code>
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(nodeKey ?? '')
-                toast.success('已复制到剪贴板')
-              } catch {
-                toast.error('复制失败，请手动选择文本')
-              }
-            }}
-          >
-            <CopyIcon />
-            复制密钥
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
   )
 }
 

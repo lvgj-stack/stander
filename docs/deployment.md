@@ -169,8 +169,27 @@ liveness 刻意不查数据库：否则数据库一挂，kubelet 会把所有 Po
 
 ## agent
 
-agent 跑在实际做端口转发的机器上。绝大多数情况下那是集群外的独立 VPS，用脚本
-安装：
+agent 跑在实际做端口转发的机器上。绝大多数情况下那是集群外的独立 VPS。
+
+### 从控制台拿安装命令（推荐）
+
+管理端 › 节点 › 新增节点，创建完直接弹出一条可以粘贴执行的命令；已有节点在行
+操作菜单里选 安装命令 也能再拿一次。命令形如：
+
+```bash
+curl -fsSL .../install.sh | sudo bash -s -- <controller-addr:8123> <node-key>
+```
+
+命令里的控制面地址取自 `Server.ControllerAddr`；**集群部署一定要配上它**——不配
+的话服务端只能拿浏览器访问的 Host 加 `Server.Port` 去猜，而 Ingress 后面浏览器
+访问控制台和 agent 回连 `/api/v1` 根本不是同一个端口，猜出来的地址是错的。
+弹窗里那个地址输入框可以改，改完命令会跟着变并记在浏览器本地，但配置项才是
+一劳永逸的做法。
+
+内网/离线部署再配上 `Server.InstallScriptURL`，让命令去自己的镜像取脚本。两项
+都在 [configuration.md](configuration.md) 里。
+
+### 手动安装
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lvgj-stack/stander/main/scripts/install.sh \

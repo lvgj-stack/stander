@@ -25,6 +25,10 @@ configMapGenerator:
     behavior: merge
     literals:
       - STANDER_DATABASE_ADDR=mysql.stander.svc.cluster.local:3306
+      # Must match how agents actually reach /api/v1 — the Ingress host here,
+      # or a direct address if they bypass it. The console's install command is
+      # only copy-pasteable if this is right. See the base ConfigMap.
+      - STANDER_SERVER_CONTROLLERADDR=stander.example.com:80
 
 generatorOptions:
   disableNameSuffixHash: true

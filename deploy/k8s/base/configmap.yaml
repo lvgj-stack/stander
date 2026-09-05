@@ -11,6 +11,13 @@ data:
   STANDER_SERVER_LOGFORMAT: "json"
   STANDER_SERVER_TIMEZONE: "Asia/Shanghai"
   STANDER_SERVER_WORKERINTERVALSECONDS: "30"
+  # The address agents dial, which the console pastes into the install command
+  # it hands an operator. It has to be set here rather than guessed from the
+  # request: behind the Ingress the browser reaches the console at :443 while an
+  # agent reaches /api/v1 at :80, and nothing in the Host header says so.
+  # Port 80, not 443 — internal/client/client.go dials plain http.
+  # Override it in the overlay with the real hostname.
+  STANDER_SERVER_CONTROLLERADDR: "stander.example.com:80"
   STANDER_DATABASE_ADDR: "mysql:3306"
   STANDER_DATABASE_DBNAME: "stander"
   STANDER_DATABASE_USERNAME: "stander"

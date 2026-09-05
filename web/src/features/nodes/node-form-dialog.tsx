@@ -49,8 +49,12 @@ interface NodeFormDialogProps {
   onOpenChange: (open: boolean) => void
   /** Absent means "create"; present means "edit that node". */
   node?: Node
-  /** Called with the freshly issued key after a create. */
-  onCreated?: (key: string) => void
+  /**
+   * Called after a create with the freshly issued key and the IPv6 preference
+   * the form was submitted with, which together are what the install command
+   * needs beyond the deployment's own settings.
+   */
+  onCreated?: (created: { key: string; preferIPv6: boolean }) => void
 }
 
 export function NodeFormDialog({ open, onOpenChange, node, onCreated }: NodeFormDialogProps) {
@@ -90,7 +94,9 @@ export function NodeFormDialog({ open, onOpenChange, node, onCreated }: NodeForm
     invalidate: [['nodes']],
     onSuccess: (key) => {
       onOpenChange(false)
-      if (!editing && typeof key === 'string' && key) onCreated?.(key)
+      if (!editing && typeof key === 'string' && key) {
+        onCreated?.({ key, preferIPv6: form.getValues('defaultIPv6') })
+      }
     },
   })
 
@@ -102,7 +108,7 @@ export function NodeFormDialog({ open, onOpenChange, node, onCreated }: NodeForm
           <DialogDescription>
             {editing
               ? '节点类型创建后不可更改。'
-              : '创建后会生成一个节点密钥，agent 启动时需要它，且只展示这一次。'}
+              : '创建后会给出一条安装命令，在目标机器上直接执行即可把 agent 装好并接入。'}
           </DialogDescription>
         </DialogHeader>
 
@@ -184,7 +190,9 @@ export function NodeFormDialog({ open, onOpenChange, node, onCreated }: NodeForm
                   <FormItem className="flex items-center justify-between rounded-md border p-3">
                     <div className="space-y-0.5">
                       <FormLabel>默认走 IPv6</FormLabel>
-                      <FormDescription>节点注册时优先使用 IPv6 地址。</FormDescription>
+                      <FormDescription>
+                        节点注册时优先使用 IPv6 地址；安装命令会带上 --prefer-ipv6。
+                      </FormDescription>
                     </div>
                     <FormControl>
                       <Switch checked={field.value} onCheckedChange={field.onChange} />

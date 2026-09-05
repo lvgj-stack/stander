@@ -23,6 +23,8 @@
 | `Server.Timezone` | `STANDER_SERVER_TIMEZONE` | `Asia/Shanghai` | 进程时区。**会影响每日流量的日期归属**，见下 |
 | `Server.WorkerIntervalSeconds` | `STANDER_SERVER_WORKERINTERVALSECONDS` | `30` | 后台任务的执行间隔 |
 | `Server.NodeRole` | `STANDER_SERVER_NODEROLE` | `Controller` | 节点角色，由子命令决定，一般不用手动设 |
+| `Server.ControllerAddr` | `STANDER_SERVER_CONTROLLERADDR` | 空 | agent 回连的对外地址 `host:port`。控制台生成安装命令时用，见下 |
+| `Server.InstallScriptURL` | `STANDER_SERVER_INSTALLSCRIPTURL` | GitHub 上的 `scripts/install.sh` | 安装命令 curl 的脚本地址。内网/离线部署指向自己的镜像 |
 | `EnableRelay` | `STANDER_ENABLERELAY` | `false` | 是否启用转发链管理器（由 worker 承载） |
 | `Database.Addr` | `STANDER_DATABASE_ADDR` | `127.0.0.1:3306` | MySQL 地址 |
 | `Database.DBName` | `STANDER_DATABASE_DBNAME` | `stander` | 库名 |
@@ -37,6 +39,23 @@
 `/etc/localtime`，如果不显式设置就会退回 UTC，每日流量的滚动点比宿主机上跑的
 二进制差 8 小时。时区数据通过 `time/tzdata` 内嵌进二进制，所以镜像里不需要
 额外装 tzdata 包。
+
+### 关于 `Server.ControllerAddr`
+
+控制台在新建节点后给出一条可以直接粘到目标机器上执行的安装命令，命令里的
+`-a <控制面地址>` 就取自这里。
+
+不设的话，服务端拿本次请求的 `Host` 去掉端口、接上 `Server.Port` 当作推测值。
+单机部署（控制台和控制面是同一个进程、同一个域名）这样是对的；但只要前面挡了
+nginx 或 Ingress，浏览器访问的端口和 agent 回连 `/api/v1` 的端口就不是一个，
+甚至根本是另一个域名或内网 IP——请求的 `Host` 头对此一无所知。这种部署把这一项
+显式配上，运维就不用每次手改。
+
+注意 agent 走的是明文 http（`internal/client/client.go` 里拼的就是
+`http://<addr>/api/v1/...`），所以这里填的应该是一个 http 端点。
+
+控制台里那个地址输入框始终可改，改动会记在浏览器本地，所以即使这一项没配，也
+只需要在第一次创建节点时填一次。
 
 ## agent 的参数
 

@@ -10,7 +10,7 @@ import {
   setUserResources,
 } from './forward-user'
 import { associatePlan, listPlans } from './plan'
-import { addNode, deleteNode, listNodes } from './node'
+import { addNode, deleteNode, getAgentInstallInfo, listNodes } from './node'
 import { listRoles } from './role'
 import { addRule, deleteRule, testRule } from './rule'
 import { listUsers } from './user'
@@ -75,6 +75,15 @@ describe('node actions', () => {
   it('deletes a node by id', async () => {
     await deleteNode(42)
     expect(sent()).toMatchObject({ url: '/stander/node?Action=DeleteNode', body: { ID: 42 } })
+  })
+
+  it('asks for what the install command needs besides the key', async () => {
+    await getAgentInstallInfo()
+    expect(sent()).toMatchObject({
+      url: '/stander/node?Action=GetAgentInstallInfo',
+      method: 'POST',
+      body: {},
+    })
   })
 })
 

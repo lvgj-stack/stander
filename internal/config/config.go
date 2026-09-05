@@ -12,6 +12,11 @@ import (
 	"github.com/lvgj-stack/stander/internal/common"
 )
 
+// DefaultInstallScriptURL is the published installer the console's one-liner
+// curls when no mirror is configured. It is the same URL scripts/install.sh
+// documents at its top.
+const DefaultInstallScriptURL = "https://raw.githubusercontent.com/lvgj-stack/stander/main/scripts/install.sh"
+
 var c *Config
 
 type Config struct {
@@ -58,6 +63,17 @@ type Server struct {
 	// keyed by date, so this decides when a day rolls over; a container
 	// defaulting to UTC would shift the boundary by the offset.
 	Timezone string
+	// ControllerAddr is the host:port agents dial, as reachable from the
+	// outside. The console pastes it into the install command it hands an
+	// operator, so it has to be the public address rather than whatever the
+	// process happens to bind: behind nginx or an ingress the browser talks to
+	// :443 while agents talk to :8123, and the request's own Host header knows
+	// nothing about that. Empty falls back to the console's host with Port
+	// appended, which is right for a single-host deployment.
+	ControllerAddr string
+	// InstallScriptURL is where the install one-liner curls its script from.
+	// An air-gapped or mirrored deployment points this at its own copy.
+	InstallScriptURL string
 }
 
 // Admin holds settings for the admin console that used to live in naive-admin-go.
@@ -122,6 +138,8 @@ func registerDefaults(v *viper.Viper) {
 	v.SetDefault("server.workerintervalseconds", 30)
 	v.SetDefault("server.timezone", "Asia/Shanghai")
 	v.SetDefault("server.logformat", "text")
+	v.SetDefault("server.controlleraddr", "")
+	v.SetDefault("server.installscripturl", "")
 
 	v.SetDefault("enablerelay", false)
 
@@ -154,6 +172,9 @@ func applyDefaults(c *Config) {
 	}
 	if c.Server.LogFormat == "" {
 		c.Server.LogFormat = "text"
+	}
+	if c.Server.InstallScriptURL == "" {
+		c.Server.InstallScriptURL = DefaultInstallScriptURL
 	}
 }
 

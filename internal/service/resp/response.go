@@ -41,6 +41,14 @@ type DelNodeResp struct {
 	ID int64
 }
 
+// AgentInstallInfoResp is the deployment-wide half of a node's install
+// command; the node key is the other half and comes from AddNode or the node
+// listing.
+type AgentInstallInfoResp struct {
+	ControllerAddr string `json:"controllerAddr"`
+	ScriptURL      string `json:"scriptUrl"`
+}
+
 type RawResponse[T any] struct {
 	RequestId string
 	Error     error
