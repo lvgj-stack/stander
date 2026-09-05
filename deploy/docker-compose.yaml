@@ -25,6 +25,14 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
+      args:
+        # 构建容器不继承宿主机的 Go 配置：`go env` 里的 GOPROXY 写在
+        # ~/.config/go/env 里，镜像里那个 golang 容器读不到它。默认值与
+        # Dockerfile、scripts/e2e-kind.sh 保持一致，连不到 proxy.golang.org
+        # 的网络下从 shell 覆盖：
+        #   GOPROXY=https://goproxy.cn,direct docker compose ... up -d --build
+        # 走 args 而不是让人每次敲 --build-arg，是因为 `up --build` 不收这个参数。
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
     environment:
       STANDER_DATABASE_ADDR: mysql:3306
       STANDER_DATABASE_USERNAME: root

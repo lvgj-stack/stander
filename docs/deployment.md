@@ -8,6 +8,16 @@
 | 单机 | `stander server`（后台任务在同进程内） |
 | Kubernetes | `stander server --worker=false` × N + `stander worker` × 1 + 控制台 × N |
 
+连不到 `proxy.golang.org` 的网络下（`go mod download` 在 build 里 exit 1），
+给本地栈换个模块镜像源——compose 会把它作为 build-arg 传进 Go 那层：
+
+```bash
+GOPROXY=https://goproxy.cn,direct docker compose -f deploy/docker-compose.yaml up -d --build
+```
+
+宿主机 `go env` 里的 GOPROXY 不算数：那份配置在 `~/.config/go/env` 里，构建
+容器读不到。`scripts/e2e-kind.sh` 用的是同一个开关。
+
 CI/CD 见 [cicd.md](cicd.md)。每个 PR 都会把整套清单部署到一个真实的 kind 集群上
 跑一遍，所以这里写的步骤是被机器验证过的，不是纸面流程。
 
