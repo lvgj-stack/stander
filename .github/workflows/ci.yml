@@ -119,11 +119,20 @@ jobs:
         # applying, and tearing it down. Letting an action create the cluster
         # instead would mean CI and a developer's laptop run different code
         # paths, which is exactly the drift this job exists to catch.
+        #
+        # Installed into a directory this job owns, not /usr/local/bin: the
+        # runner image already ships a kind there, root-owned and group-
+        # writable, so `curl -o` overwrites it happily and the chmod that
+        # follows dies with EPERM. $GITHUB_PATH prepends, so the pinned
+        # version below is the one later steps get.
         run: |
-          curl -fsSL -o /usr/local/bin/kind \
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -fsSL -o "$RUNNER_TEMP/bin/kind" \
             https://kind.sigs.k8s.io/dl/v0.30.0/kind-linux-amd64
-          chmod +x /usr/local/bin/kind
-          kind version
+          chmod +x "$RUNNER_TEMP/bin/kind"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          # Not yet on PATH inside the step that adds it.
+          "$RUNNER_TEMP/bin/kind" version
 
       - name: Deploy to the cluster and drive it
         run: scripts/e2e-kind.sh
