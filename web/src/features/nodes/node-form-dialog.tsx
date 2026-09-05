@@ -36,7 +36,10 @@ import { useActionMutation } from '@/hooks/use-action-mutation'
 import type { Node } from '@/types/api'
 
 const schema = z.object({
-  nodeName: z.string().min(1, '请输入节点名称'),
+  // Trimmed before the length check, so a name of only spaces is refused here
+  // for the same reason the server refuses it, and the name submitted is the
+  // one that gets stored.
+  nodeName: z.string().trim().min(1, '请输入节点名称'),
   nodeType: z.enum(['inbound', 'outbound']),
   rate: z.number({ error: '请输入数字' }).positive('倍率必须大于 0'),
   defaultIPv6: z.boolean(),

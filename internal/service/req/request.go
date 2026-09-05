@@ -53,9 +53,13 @@ type TestRuleReq struct {
 	Destination string
 }
 
+// AddNodeReq carries no `required` or `vd:` rules, unlike its neighbours here.
+// Creating a node is validated by service.validateAddNode instead; that
+// function's comment says why. Adding a tag back would give the rules a second
+// home on the server to drift from.
 type AddNodeReq struct {
-	NodeName string  `json:"NodeName,required"`
-	NodeType string  `json:"NodeType,required" vd:"$=='inbound'||$=='outbound'"`
+	NodeName string  `json:"NodeName"`
+	NodeType string  `json:"NodeType"`
 	Rate     float32 `json:"Rate"`
 
 	DefaultIPv6 bool `json:"DefaultIPv6"`
