@@ -28,17 +28,7 @@ func AssociatePlan(ctx context.Context, r *req.AssociatePlanReq) (*resp.EmptyRes
 	if err != nil {
 		return nil, err
 	}
-	from := time.Now()
-	switch entity.PlanPeriod(*plan.Period) {
-	case entity.Month:
-		from = from.AddDate(0, 1, 0)
-	case entity.Quarter:
-		from = from.AddDate(0, 3, 0)
-	case entity.HalfYear:
-		from = from.AddDate(0, 6, 0)
-	case entity.Year:
-		from = from.AddDate(1, 0, 0)
-	}
+	from := PlanPeriodEnd(time.Now(), plan.Period)
 	if _, err := dal.User.WithContext(ctx).Where(dal.User.ID.Eq(r.UserId)).Updates(
 		&entity.User{
 			PlanID:           r.PlanId,
@@ -71,4 +61,31 @@ func ListPlans(ctx context.Context, r *req.ListPlansReq) (*resp.ListPlansResp, e
 	return &resp.ListPlansResp{
 		Plans: planTo,
 	}, nil
+}
+
+// PlanPeriodEnd returns when a plan taken out at `from` runs out, which is
+// also when its traffic allowance resets.
+//
+// Exported because account creation needs the same arithmetic inside its own
+// transaction: it used to call AssociatePlan after committing the new account,
+// which meant a plan lookup failure reported an error over an account that
+// already existed.
+//
+// A NULL period yields `from` unchanged rather than panicking. The column is
+// nullable and the old inline version dereferenced it.
+func PlanPeriodEnd(from time.Time, period *int32) time.Time {
+	if period == nil {
+		return from
+	}
+	switch entity.PlanPeriod(*period) {
+	case entity.Month:
+		return from.AddDate(0, 1, 0)
+	case entity.Quarter:
+		return from.AddDate(0, 3, 0)
+	case entity.HalfYear:
+		return from.AddDate(0, 6, 0)
+	case entity.Year:
+		return from.AddDate(1, 0, 0)
+	}
+	return from
 }

@@ -176,6 +176,15 @@ cookie 只带 id。多副本下签发和校验通常不在同一个副本，登�
 `internal/admin/model` 下手写的 gorm 模型。`user` 表**只有** gorm-gen 的
 `entity.User` 一份定义。
 
+`user` 表**没有主键，也没有 username 的唯一索引**（`sql/init.sql` 里就是这样，
+沿用自合并前的旧脚本）。两个后果：新账号的 id 只能靠 `max(id)+1` 手算——所以
+`handler.User.Add` 用 `SELECT ... FOR UPDATE` 把并发创建串起来；重名也只能在代码
+里挡——`Add` 会先查一次。想加唯一索引的话，得先处理掉库里已有的重名行：
+
+```sql
+select username, count(*) from user group by username having count(*) > 1;
+```
+
 原来还有 `permission` 和 `role_permissions_permission` 两张表，存的是上一版 Vue
 前端的菜单树。前端不再按它建路由，两张表也就没有了读者，已经删掉；已有的库用
 `sql/migrate-2026-09-05-two-sides.sql` 清理。

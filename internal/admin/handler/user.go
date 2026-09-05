@@ -9,6 +9,7 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/lvgj-stack/stander/internal/admin/inout"
 	"github.com/lvgj-stack/stander/internal/admin/model"
@@ -16,7 +17,6 @@ import (
 	"github.com/lvgj-stack/stander/internal/identity"
 	"github.com/lvgj-stack/stander/internal/model/entity"
 	"github.com/lvgj-stack/stander/internal/service"
-	standerreq "github.com/lvgj-stack/stander/internal/service/req"
 	"github.com/lvgj-stack/stander/internal/utils"
 )
 
@@ -168,17 +168,47 @@ func (user) Update(c context.Context, ctx *app.RequestContext) {
 	Resp.Succ(ctx, nil)
 }
 
+// Add creates an account.
+//
+// Everything happens in one transaction, the traffic plan included. It used to
+// associate the plan *after* the transaction had committed, so a plan that
+// could not be found reported "record not found" over an account that already
+// existed — and that was every single create, because the console sends no
+// plan id and plan 0 does not exist. The operator saw a failure, clicked
+// again, and got a second account with the same name. Nothing rejected that:
+// the `user` table has no unique key on username, and no primary key at all.
+// A database full of same-named accounts is what that adds up to.
 func (user) Add(c context.Context, ctx *app.RequestContext) {
 	var params inout.AddUserReq
 	if err := ctx.BindAndValidate(&params); err != nil {
 		Resp.Err(ctx, 20001, err.Error())
 		return
 	}
-	var id int
+
 	err := db.Dao.Transaction(func(tx *gorm.DB) error {
+		// Enforced here because the table cannot enforce it: adding the unique
+		// key that belongs on this column would fail on any database that has
+		// already accumulated duplicates.
+		var taken int64
+		if err := tx.Model(&entity.User{}).Where("username = ?", params.Username).Count(&taken).Error; err != nil {
+			return err
+		}
+		if taken > 0 {
+			return fmt.Errorf("用户名「%s」已存在", params.Username)
+		}
+
 		// The `user` table has no auto_increment, so the id is picked by hand.
-		tx.Model(&entity.User{}).Select("max(id)").First(&id)
-		newID := int32(id + 1)
+		// FOR UPDATE serialises two concurrent creates, which would otherwise
+		// both read the same max and write the same id.
+		var maxID int
+		if err := tx.Model(&entity.User{}).
+			Clauses(clause.Locking{Strength: "UPDATE"}).
+			Select("coalesce(max(id), 0)").
+			Scan(&maxID).Error; err != nil {
+			return err
+		}
+		newID := int32(maxID + 1)
+
 		enable := int32(0)
 		if params.Enable {
 			enable = 1
@@ -193,12 +223,27 @@ func (user) Add(c context.Context, ctx *app.RequestContext) {
 			CreateTime: &now,
 			UpdateTime: &now,
 		}
+
+		// A plan is optional. An account created without one shows as 未关联 on
+		// 转发用户 and is given a plan there; that is the normal path, and it
+		// must not be reported as a failure.
+		if params.PlanId != 0 {
+			var plan entity.TrafficPlan
+			if err := tx.Where("id = ?", params.PlanId).First(&plan).Error; err != nil {
+				return fmt.Errorf("套餐 %d 不存在: %w", params.PlanId, err)
+			}
+			expiry := service.PlanPeriodEnd(now, plan.Period)
+			newUser.PlanID = int64(params.PlanId)
+			newUser.ExpirationTime = &expiry
+			newUser.ResetTrafficTime = &expiry
+		}
+
 		// Omit the association, otherwise gorm tries to upsert an empty traffic plan.
 		if err := tx.Omit("TrafficPlan").Create(&newUser).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&model.Profile{
-			ID:       id + 1,
+			ID:       int(newID),
 			UserId:   int(newID),
 			NickName: params.Username,
 		}).Error; err != nil {
@@ -215,16 +260,6 @@ func (user) Add(c context.Context, ctx *app.RequestContext) {
 		return nil
 	})
 	if err != nil {
-		Resp.Err(ctx, 20001, err.Error())
-		return
-	}
-
-	// Pre-merge this went out over HTTP with a hand-rolled empty gin.Context.
-	// Calling the request-context-free core directly removes that hack.
-	if _, err := service.AssociatePlan(c, &standerreq.AssociatePlanReq{
-		PlanId: int64(params.PlanId),
-		UserId: int32(id + 1),
-	}); err != nil {
 		Resp.Err(ctx, 20001, err.Error())
 		return
 	}
