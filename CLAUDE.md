@@ -9,3 +9,4 @@ CLAUDE.md 时会把这些文件的正文一起载进来。`.claude/rules/` 目�
 @.claude/rules/commit-message.md
 @.claude/rules/roles.md
 @.claude/rules/agent-skills.md
+@.claude/rules/plugins.md

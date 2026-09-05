@@ -1,0 +1,18 @@
+{
+  "extraKnownMarketplaces": {
+    "openai-codex": {
+      "source": {
+        "source": "github",
+        "repo": "openai/codex-plugin-cc"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": true,
+    "mattpocock-skills@claude-plugins-official": true,
+    "commit-commands@claude-plugins-official": true,
+    "skill-creator@claude-plugins-official": true,
+    "gopls-lsp@claude-plugins-official": true,
+    "codex@openai-codex": true
+  }
+}

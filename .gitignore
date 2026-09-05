@@ -48,3 +48,6 @@ web/.env.local
 
 # worktree（见 CLAUDE.md）
 .claude/worktrees/
+
+# 个人的 Claude Code 覆盖设置，共享的那份是 .claude/settings.json
+.claude/settings.local.json
