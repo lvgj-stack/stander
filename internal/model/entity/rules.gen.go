@@ -17,7 +17,7 @@ type Rule struct {
 	ID         int64          `gorm:"column:id;type:bigint unsigned;primaryKey;autoIncrement:true" json:"id"`
 	CreatedAt  *time.Time     `gorm:"column:created_at;type:datetime(3)" json:"createdAt"`
 	UpdatedAt  *time.Time     `gorm:"column:updated_at;type:datetime(3)" json:"updatedAt"`
-	DeletedAt  gorm.DeletedAt `gorm:"column:deleted_at;type:datetime(3);index:idx_chains_deleted_at,priority:1" json:"deletedAt"`
+	DeletedAt  gorm.DeletedAt `gorm:"column:deleted_at;type:datetime(3);index:idx_rules_deleted_at,priority:1" json:"deletedAt"`
 	RuleName   *string        `gorm:"column:rule_name;type:varchar(255)" json:"ruleName"`
 	NodeID     *int64         `gorm:"column:node_id;type:bigint" json:"nodeId"`
 	ChainID    *int64         `gorm:"column:chain_id;type:bigint" json:"chainId"`

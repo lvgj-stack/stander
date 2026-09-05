@@ -105,11 +105,14 @@ func (u *userRoleNodeMapping) fillFieldMap() {
 
 func (u userRoleNodeMapping) clone(db *gorm.DB) userRoleNodeMapping {
 	u.userRoleNodeMappingDo.ReplaceConnPool(db.Statement.ConnPool)
+	u.Node.db = db.Session(&gorm.Session{Initialized: true})
+	u.Node.db.Statement.ConnPool = db.Statement.ConnPool
 	return u
 }
 
 func (u userRoleNodeMapping) replaceDB(db *gorm.DB) userRoleNodeMapping {
 	u.userRoleNodeMappingDo.ReplaceDB(db)
+	u.Node.db = db.Session(&gorm.Session{})
 	return u
 }
 
@@ -144,6 +147,11 @@ func (a userRoleNodeMappingHasOneNode) Session(session *gorm.Session) *userRoleN
 
 func (a userRoleNodeMappingHasOneNode) Model(m *entity.UserRoleNodeMapping) *userRoleNodeMappingHasOneNodeTx {
 	return &userRoleNodeMappingHasOneNodeTx{a.db.Model(m).Association(a.Name())}
+}
+
+func (a userRoleNodeMappingHasOneNode) Unscoped() *userRoleNodeMappingHasOneNode {
+	a.db = a.db.Unscoped()
+	return &a
 }
 
 type userRoleNodeMappingHasOneNodeTx struct{ tx *gorm.Association }
@@ -182,6 +190,11 @@ func (a userRoleNodeMappingHasOneNodeTx) Clear() error {
 
 func (a userRoleNodeMappingHasOneNodeTx) Count() int64 {
 	return a.tx.Count()
+}
+
+func (a userRoleNodeMappingHasOneNodeTx) Unscoped() *userRoleNodeMappingHasOneNodeTx {
+	a.tx = a.tx.Unscoped()
+	return &a
 }
 
 type userRoleNodeMappingDo struct{ gen.DO }

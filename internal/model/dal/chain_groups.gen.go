@@ -144,11 +144,14 @@ func (c *chainGroup) fillFieldMap() {
 
 func (c chainGroup) clone(db *gorm.DB) chainGroup {
 	c.chainGroupDo.ReplaceConnPool(db.Statement.ConnPool)
+	c.Chain.db = db.Session(&gorm.Session{Initialized: true})
+	c.Chain.db.Statement.ConnPool = db.Statement.ConnPool
 	return c
 }
 
 func (c chainGroup) replaceDB(db *gorm.DB) chainGroup {
 	c.chainGroupDo.ReplaceDB(db)
+	c.Chain.db = db.Session(&gorm.Session{})
 	return c
 }
 
@@ -189,6 +192,11 @@ func (a chainGroupHasOneChain) Model(m *entity.ChainGroup) *chainGroupHasOneChai
 	return &chainGroupHasOneChainTx{a.db.Model(m).Association(a.Name())}
 }
 
+func (a chainGroupHasOneChain) Unscoped() *chainGroupHasOneChain {
+	a.db = a.db.Unscoped()
+	return &a
+}
+
 type chainGroupHasOneChainTx struct{ tx *gorm.Association }
 
 func (a chainGroupHasOneChainTx) Find() (result *entity.Chain, err error) {
@@ -225,6 +233,11 @@ func (a chainGroupHasOneChainTx) Clear() error {
 
 func (a chainGroupHasOneChainTx) Count() int64 {
 	return a.tx.Count()
+}
+
+func (a chainGroupHasOneChainTx) Unscoped() *chainGroupHasOneChainTx {
+	a.tx = a.tx.Unscoped()
+	return &a
 }
 
 type chainGroupDo struct{ gen.DO }

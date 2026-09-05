@@ -150,11 +150,17 @@ func (r *rule) fillFieldMap() {
 
 func (r rule) clone(db *gorm.DB) rule {
 	r.ruleDo.ReplaceConnPool(db.Statement.ConnPool)
+	r.Node.db = db.Session(&gorm.Session{Initialized: true})
+	r.Node.db.Statement.ConnPool = db.Statement.ConnPool
+	r.Chain.db = db.Session(&gorm.Session{Initialized: true})
+	r.Chain.db.Statement.ConnPool = db.Statement.ConnPool
 	return r
 }
 
 func (r rule) replaceDB(db *gorm.DB) rule {
 	r.ruleDo.ReplaceDB(db)
+	r.Node.db = db.Session(&gorm.Session{})
+	r.Chain.db = db.Session(&gorm.Session{})
 	return r
 }
 
@@ -189,6 +195,11 @@ func (a ruleHasOneNode) Session(session *gorm.Session) *ruleHasOneNode {
 
 func (a ruleHasOneNode) Model(m *entity.Rule) *ruleHasOneNodeTx {
 	return &ruleHasOneNodeTx{a.db.Model(m).Association(a.Name())}
+}
+
+func (a ruleHasOneNode) Unscoped() *ruleHasOneNode {
+	a.db = a.db.Unscoped()
+	return &a
 }
 
 type ruleHasOneNodeTx struct{ tx *gorm.Association }
@@ -229,6 +240,11 @@ func (a ruleHasOneNodeTx) Count() int64 {
 	return a.tx.Count()
 }
 
+func (a ruleHasOneNodeTx) Unscoped() *ruleHasOneNodeTx {
+	a.tx = a.tx.Unscoped()
+	return &a
+}
+
 type ruleHasOneChain struct {
 	db *gorm.DB
 
@@ -264,6 +280,11 @@ func (a ruleHasOneChain) Session(session *gorm.Session) *ruleHasOneChain {
 
 func (a ruleHasOneChain) Model(m *entity.Rule) *ruleHasOneChainTx {
 	return &ruleHasOneChainTx{a.db.Model(m).Association(a.Name())}
+}
+
+func (a ruleHasOneChain) Unscoped() *ruleHasOneChain {
+	a.db = a.db.Unscoped()
+	return &a
 }
 
 type ruleHasOneChainTx struct{ tx *gorm.Association }
@@ -302,6 +323,11 @@ func (a ruleHasOneChainTx) Clear() error {
 
 func (a ruleHasOneChainTx) Count() int64 {
 	return a.tx.Count()
+}
+
+func (a ruleHasOneChainTx) Unscoped() *ruleHasOneChainTx {
+	a.tx = a.tx.Unscoped()
+	return &a
 }
 
 type ruleDo struct{ gen.DO }

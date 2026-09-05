@@ -22,7 +22,7 @@ type ChainGroup struct {
 	ChainGroupID   string         `gorm:"column:chain_group_id;type:varchar(255);not null" json:"chainGroupId"`
 	ChainGroupName *string        `gorm:"column:chain_group_name;type:varchar(255)" json:"chainGroupName"`
 	ChainName      *string        `gorm:"column:chain_name;type:varchar(255)" json:"chainName"`
-	Backup         bool           `gorm:"column:backup;type:tinyint" json:"backup"`
+	Backup         bool           `gorm:"column:backup;type:tinyint;not null" json:"backup"`
 	MaxFails       *int32         `gorm:"column:max_fails;type:int unsigned" json:"maxFails"`
 	Timeout        *int32         `gorm:"column:timeout;type:int unsigned" json:"timeout"`
 	Weight         *int32         `gorm:"column:weight;type:int unsigned" json:"weight"`

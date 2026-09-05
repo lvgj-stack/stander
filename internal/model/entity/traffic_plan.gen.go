@@ -17,7 +17,7 @@ type TrafficPlan struct {
 	ID           int64          `gorm:"column:id;type:bigint unsigned;primaryKey;autoIncrement:true" json:"id"`
 	CreatedAt    *time.Time     `gorm:"column:created_at;type:datetime(3)" json:"createdAt"`
 	UpdatedAt    *time.Time     `gorm:"column:updated_at;type:datetime(3)" json:"updatedAt"`
-	DeletedAt    gorm.DeletedAt `gorm:"column:deleted_at;type:datetime(3);index:idx_udt_deleted_at,priority:1" json:"deletedAt"`
+	DeletedAt    gorm.DeletedAt `gorm:"column:deleted_at;type:datetime(3);index:idx_traffic_plan_deleted_at,priority:1" json:"deletedAt"`
 	TotalTraffic int64          `gorm:"column:total_traffic;type:bigint;not null;comment:消耗" json:"totalTraffic"` // 消耗
 	Period       *int32         `gorm:"column:period;type:int" json:"period"`
 	PlanName     *string        `gorm:"column:plan_name;type:varchar(255)" json:"planName"`

@@ -110,11 +110,14 @@ func (u *userRoleChainMapping) fillFieldMap() {
 
 func (u userRoleChainMapping) clone(db *gorm.DB) userRoleChainMapping {
 	u.userRoleChainMappingDo.ReplaceConnPool(db.Statement.ConnPool)
+	u.Chain.db = db.Session(&gorm.Session{Initialized: true})
+	u.Chain.db.Statement.ConnPool = db.Statement.ConnPool
 	return u
 }
 
 func (u userRoleChainMapping) replaceDB(db *gorm.DB) userRoleChainMapping {
 	u.userRoleChainMappingDo.ReplaceDB(db)
+	u.Chain.db = db.Session(&gorm.Session{})
 	return u
 }
 
@@ -155,6 +158,11 @@ func (a userRoleChainMappingHasOneChain) Model(m *entity.UserRoleChainMapping) *
 	return &userRoleChainMappingHasOneChainTx{a.db.Model(m).Association(a.Name())}
 }
 
+func (a userRoleChainMappingHasOneChain) Unscoped() *userRoleChainMappingHasOneChain {
+	a.db = a.db.Unscoped()
+	return &a
+}
+
 type userRoleChainMappingHasOneChainTx struct{ tx *gorm.Association }
 
 func (a userRoleChainMappingHasOneChainTx) Find() (result *entity.Chain, err error) {
@@ -191,6 +199,11 @@ func (a userRoleChainMappingHasOneChainTx) Clear() error {
 
 func (a userRoleChainMappingHasOneChainTx) Count() int64 {
 	return a.tx.Count()
+}
+
+func (a userRoleChainMappingHasOneChainTx) Unscoped() *userRoleChainMappingHasOneChainTx {
+	a.tx = a.tx.Unscoped()
+	return &a
 }
 
 type userRoleChainMappingDo struct{ gen.DO }

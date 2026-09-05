@@ -125,11 +125,14 @@ func (u *user) fillFieldMap() {
 
 func (u user) clone(db *gorm.DB) user {
 	u.userDo.ReplaceConnPool(db.Statement.ConnPool)
+	u.TrafficPlan.db = db.Session(&gorm.Session{Initialized: true})
+	u.TrafficPlan.db.Statement.ConnPool = db.Statement.ConnPool
 	return u
 }
 
 func (u user) replaceDB(db *gorm.DB) user {
 	u.userDo.ReplaceDB(db)
+	u.TrafficPlan.db = db.Session(&gorm.Session{})
 	return u
 }
 
@@ -164,6 +167,11 @@ func (a userHasOneTrafficPlan) Session(session *gorm.Session) *userHasOneTraffic
 
 func (a userHasOneTrafficPlan) Model(m *entity.User) *userHasOneTrafficPlanTx {
 	return &userHasOneTrafficPlanTx{a.db.Model(m).Association(a.Name())}
+}
+
+func (a userHasOneTrafficPlan) Unscoped() *userHasOneTrafficPlan {
+	a.db = a.db.Unscoped()
+	return &a
 }
 
 type userHasOneTrafficPlanTx struct{ tx *gorm.Association }
@@ -202,6 +210,11 @@ func (a userHasOneTrafficPlanTx) Clear() error {
 
 func (a userHasOneTrafficPlanTx) Count() int64 {
 	return a.tx.Count()
+}
+
+func (a userHasOneTrafficPlanTx) Unscoped() *userHasOneTrafficPlanTx {
+	a.tx = a.tx.Unscoped()
+	return &a
 }
 
 type userDo struct{ gen.DO }
