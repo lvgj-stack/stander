@@ -5,7 +5,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { NodeFormDialog } from './node-form-dialog'
 
 /**
- * 创建 has to reach the server.
+ * 创建 has to reach the server, carrying what the form was filled in with.
+ *
+ * Both halves are asserted against the request itself, and for the same
+ * reason: everything downstream of it has passed while the feature was broken.
  *
  * The console once shipped a rate input carrying `min="0.1" step="0.1"`, which
  * makes the default rate of 1 a step mismatch in floating point. A form with an
@@ -13,6 +16,13 @@ import { NodeFormDialog } from './node-form-dialog'
  * react-hook-form's handler never ran, and the button did nothing at all —
  * no request, no error, no message. Asserting the request is what catches that
  * class of bug; asserting the mutation would not.
+ *
+ * The IPv6 preference failed the other way round: it was a field the backend
+ * accepted and dropped, and the install command shown right afterwards was
+ * built from the form's own memory — so every test that stopped short of the
+ * request body still passed while the preference never left the browser.
+ * Asserting that `addNode` sends what it is handed proves nothing either; the
+ * question is what the form hands it.
  */
 
 function renderDialog() {
@@ -38,6 +48,13 @@ function stubAddNode() {
   return fetchMock
 }
 
+/** The body of the AddNode request, once one has been sent. */
+async function createdBody(fetchMock: ReturnType<typeof stubAddNode>) {
+  await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+  const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+  return JSON.parse(String(init.body)) as Record<string, unknown>
+}
+
 afterEach(() => {
   vi.unstubAllGlobals()
 })
@@ -51,13 +68,50 @@ describe('NodeFormDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: '创建' }))
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled())
-    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    const [url] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
     expect(url).toContain('Action=AddNode')
-    expect(JSON.parse(String(init.body))).toMatchObject({
+    expect(await createdBody(fetchMock)).toMatchObject({
       NodeName: 'hk-01',
       NodeType: 'inbound',
       Rate: 1,
     })
+  })
+
+  it('sends the IPv6 preference the switch was turned on', async () => {
+    const fetchMock = stubAddNode()
+    renderDialog()
+
+    fireEvent.click(screen.getByLabelText('默认走 IPv6'))
+    fireEvent.change(screen.getByPlaceholderText('hk-01'), { target: { value: 'hk-01' } })
+    fireEvent.click(screen.getByRole('button', { name: '创建' }))
+
+    expect(await createdBody(fetchMock)).toMatchObject({
+      NodeName: 'hk-01',
+      DefaultIPv6: true,
+    })
+  })
+
+  // Asserted as an explicit false rather than by absence: a field that goes
+  // missing is precisely the failure this pins, and a loose match passes on a
+  // body that never carried it.
+  it('sends the preference as false when the switch is left alone', async () => {
+    const fetchMock = stubAddNode()
+    renderDialog()
+
+    fireEvent.change(screen.getByPlaceholderText('hk-01'), { target: { value: 'hk-01' } })
+    fireEvent.click(screen.getByRole('button', { name: '创建' }))
+
+    expect((await createdBody(fetchMock)).DefaultIPv6).toBe(false)
+  })
+
+  it('sends the name with its surrounding whitespace removed', async () => {
+    const fetchMock = stubAddNode()
+    renderDialog()
+
+    fireEvent.change(screen.getByPlaceholderText('hk-01'), { target: { value: '  hk-01  ' } })
+    fireEvent.click(screen.getByRole('button', { name: '创建' }))
+
+    expect(await createdBody(fetchMock)).toMatchObject({ NodeName: 'hk-01' })
   })
 
   it('reports a negative rate through the form instead of letting the browser swallow it', async () => {

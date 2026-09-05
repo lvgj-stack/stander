@@ -43,6 +43,7 @@ func newNode(db *gorm.DB, opts ...gen.DOOption) node {
 	_node.Rate = field.NewFloat32(tableName, "rate")
 	_node.Protocol = field.NewInt32(tableName, "protocol")
 	_node.Iepl = field.NewInt32(tableName, "iepl")
+	_node.PreferIpv6 = field.NewBool(tableName, "prefer_ipv6")
 
 	_node.fillFieldMap()
 
@@ -52,23 +53,24 @@ func newNode(db *gorm.DB, opts ...gen.DOOption) node {
 type node struct {
 	nodeDo nodeDo
 
-	ALL       field.Asterisk
-	ID        field.Int64
-	CreatedAt field.Time
-	UpdatedAt field.Time
-	DeletedAt field.Field
-	NodeName  field.String
-	IP        field.String
-	ManagerIP field.String
-	Port      field.Int32
-	Key       field.String
-	Status    field.String
-	NodeType  field.String
-	Ipv4      field.String
-	Ipv6      field.String
-	Rate      field.Float32
-	Protocol  field.Int32 // 0=TLS,1=TCP
-	Iepl      field.Int32
+	ALL        field.Asterisk
+	ID         field.Int64
+	CreatedAt  field.Time
+	UpdatedAt  field.Time
+	DeletedAt  field.Field
+	NodeName   field.String
+	IP         field.String
+	ManagerIP  field.String
+	Port       field.Int32
+	Key        field.String
+	Status     field.String
+	NodeType   field.String
+	Ipv4       field.String
+	Ipv6       field.String
+	Rate       field.Float32
+	Protocol   field.Int32 // 0=TLS,1=TCP
+	Iepl       field.Int32
+	PreferIpv6 field.Bool // 建节点时勾的「默认走 IPv6」
 
 	fieldMap map[string]field.Expr
 }
@@ -101,6 +103,7 @@ func (n *node) updateTableName(table string) *node {
 	n.Rate = field.NewFloat32(table, "rate")
 	n.Protocol = field.NewInt32(table, "protocol")
 	n.Iepl = field.NewInt32(table, "iepl")
+	n.PreferIpv6 = field.NewBool(table, "prefer_ipv6")
 
 	n.fillFieldMap()
 
@@ -125,7 +128,7 @@ func (n *node) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (n *node) fillFieldMap() {
-	n.fieldMap = make(map[string]field.Expr, 16)
+	n.fieldMap = make(map[string]field.Expr, 17)
 	n.fieldMap["id"] = n.ID
 	n.fieldMap["created_at"] = n.CreatedAt
 	n.fieldMap["updated_at"] = n.UpdatedAt
@@ -142,6 +145,7 @@ func (n *node) fillFieldMap() {
 	n.fieldMap["rate"] = n.Rate
 	n.fieldMap["protocol"] = n.Protocol
 	n.fieldMap["iepl"] = n.Iepl
+	n.fieldMap["prefer_ipv6"] = n.PreferIpv6
 }
 
 func (n node) clone(db *gorm.DB) node {

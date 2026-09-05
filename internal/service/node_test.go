@@ -30,7 +30,7 @@ func (c *capturedArg) Match(v driver.Value) bool {
 // regenerating the entity after a schema change (`stander gen`) fails the tests
 // using this on the argument count. That is the intent rather than a cost: what
 // creation writes is the thing under test, and a new column changes it.
-func expectNodeInsert(mock sqlmock.Sqlmock, name, nodeType string) *capturedArg {
+func expectNodeInsert(mock sqlmock.Sqlmock, name, nodeType string, preferIPv6 bool) *capturedArg {
 	key := &capturedArg{}
 	mock.ExpectBegin()
 	mock.ExpectExec("INSERT INTO `nodes`").WithArgs(
@@ -49,6 +49,7 @@ func expectNodeInsert(mock sqlmock.Sqlmock, name, nodeType string) *capturedArg 
 		sqlmock.AnyArg(), // rate
 		sqlmock.AnyArg(), // protocol
 		sqlmock.AnyArg(), // iepl
+		preferIPv6,       // prefer_ipv6
 	).WillReturnResult(sqlmock.NewResult(7, 1))
 	mock.ExpectCommit()
 	return key
@@ -80,7 +81,7 @@ func TestAddNodeRefusesANonAdmin(t *testing.T) {
 // and the re-read discarded its error and then dereferenced a nil row.
 func TestAddNodeWritesOneRowAndReturnsItsKey(t *testing.T) {
 	mock := newMockDB(t)
-	key := expectNodeInsert(mock, "hk-01", "inbound")
+	key := expectNodeInsert(mock, "hk-01", "inbound", false)
 
 	got, err := AddNode(adminCtx(), &req.AddNodeReq{NodeName: "hk-01", NodeType: "inbound", Rate: 1.5})
 	if err != nil {
@@ -180,7 +181,7 @@ func TestAddNodeRejectsABadRequestBeforeTheDatabase(t *testing.T) {
 // function proves the trim happens; only this proves the action stores it.
 func TestAddNodeStoresTheTrimmedName(t *testing.T) {
 	mock := newMockDB(t)
-	expectNodeInsert(mock, "hk-01", "inbound")
+	expectNodeInsert(mock, "hk-01", "inbound", false)
 
 	if _, err := AddNode(adminCtx(), &req.AddNodeReq{NodeName: "  hk-01  ", NodeType: "inbound", Rate: 1}); err != nil {
 		t.Fatalf("AddNode: %v", err)
@@ -225,6 +226,28 @@ func TestRegisterNodeMarksTheNodeRegistered(t *testing.T) {
 	// pass here while every node silently rendered as an em dash.
 	if status.value != "registered" {
 		t.Errorf("status written = %v, want %q", status.value, "registered")
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet expectations: %v", err)
+	}
+}
+
+// The IPv6 preference has to reach the row.
+//
+// It was a bindable field the action simply ignored: the console sent it, the
+// request struct carried it, and creation dropped it on the floor. The install
+// command gets shown again later from the node list, and only a stored value
+// can tell that dialog whether to append --prefer-ipv6 — which is why
+// asserting the insert, rather than the request, is what pins this.
+func TestAddNodeStoresTheIPv6Preference(t *testing.T) {
+	mock := newMockDB(t)
+	expectNodeInsert(mock, "hk-01", "inbound", true)
+
+	_, err := AddNode(adminCtx(), &req.AddNodeReq{
+		NodeName: "hk-01", NodeType: "inbound", Rate: 1, DefaultIPv6: true,
+	})
+	if err != nil {
+		t.Fatalf("AddNode: %v", err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("unmet expectations: %v", err)

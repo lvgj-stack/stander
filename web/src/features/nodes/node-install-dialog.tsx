@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { copyText } from '@/lib/clipboard'
 import { buildInstallCommand } from '@/lib/install-command'
+import type { Node } from '@/types/api'
 
 /** The node an install command is being shown for. */
 export interface NodeInstallTarget {
@@ -26,6 +27,24 @@ export interface NodeInstallTarget {
   issued?: boolean
   /** Mirrors the "默认走 IPv6" switch on the create form. */
   preferIPv6?: boolean
+}
+
+/**
+ * The install target for a node in the list.
+ *
+ * A function rather than an object literal at the call site because dropping a
+ * field here is the whole failure this exists to prevent: the IPv6 preference
+ * used to live only in the create dialog's memory, so reopening the command
+ * from the list silently produced a different one. Only a test that carries a
+ * row through to a target can catch that, and a literal in a table cell cannot
+ * be tested without rendering the page.
+ */
+export function installTargetFor(node: Node): NodeInstallTarget {
+  return {
+    nodeName: node.nodeName,
+    nodeKey: node.key ?? '',
+    preferIPv6: node.preferIpv6,
+  }
 }
 
 /**

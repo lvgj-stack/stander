@@ -32,7 +32,11 @@ create table if not exists nodes
     ipv6       varchar(255)                null,
     rate       float        default 1      not null,
     protocol   tinyint      default 0      not null comment '0=TLS,1=TCP',
-    iepl       tinyint      default 0      not null
+    iepl       tinyint      default 0      not null,
+    -- 安装命令要按它决定加不加 --prefer-ipv6，而安装命令在节点建好之后还会被再打开，
+    -- 所以这个选择必须跟着节点存下来。列注释要和迁移脚本里的一字不差：产物是从库里
+    -- 反向生成的，注释不一样就会生成出不一样的 tag。
+    prefer_ipv6 tinyint(1) default 0       not null comment '建节点时勾的「默认走 IPv6」'
 );
 
 create index idx_nodes_deleted_at on nodes (deleted_at);

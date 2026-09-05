@@ -39,7 +39,11 @@ import { formatTime, orEmpty } from '@/lib/format'
 import type { Node } from '@/types/api'
 
 import { NodeFormDialog } from './node-form-dialog'
-import { NodeInstallDialog, type NodeInstallTarget } from './node-install-dialog'
+import {
+  installTargetFor,
+  NodeInstallDialog,
+  type NodeInstallTarget,
+} from './node-install-dialog'
 
 /** Renders the node's transport, which the entity stores as 0 = TLS, 1 = TCP. */
 function protocolLabel(protocol: number): string {
@@ -151,10 +155,7 @@ export function NodesPage() {
             {row.original.key ? (
               <DropdownMenuItem
                 onSelect={() =>
-                  setInstalling({
-                    nodeName: row.original.nodeName,
-                    nodeKey: row.original.key!,
-                  })
+                  setInstalling(installTargetFor(row.original))
                 }
               >
                 <TerminalIcon className="size-4" />

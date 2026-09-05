@@ -81,6 +81,12 @@ export interface Node {
   /** 0 = TLS, 1 = TCP. */
   protocol: number
   iepl: number
+  /**
+   * The "默认走 IPv6" the node was created with, which decides whether its
+   * install command carries `--prefer-ipv6`. Stored on the node because that
+   * command gets reopened from the list long after the create dialog is gone.
+   */
+  preferIpv6: boolean
 }
 
 /**

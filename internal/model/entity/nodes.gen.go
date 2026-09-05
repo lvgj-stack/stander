@@ -14,22 +14,23 @@ const TableNameNode = "nodes"
 
 // Node mapped from table <nodes>
 type Node struct {
-	ID        int64          `gorm:"column:id;type:bigint unsigned;primaryKey;autoIncrement:true" json:"id"`
-	CreatedAt *time.Time     `gorm:"column:created_at;type:datetime(3)" json:"createdAt"`
-	UpdatedAt *time.Time     `gorm:"column:updated_at;type:datetime(3)" json:"updatedAt"`
-	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;type:datetime(3);index:idx_nodes_deleted_at,priority:1" json:"deletedAt"`
-	NodeName  *string        `gorm:"column:node_name;type:varchar(255)" json:"nodeName"`
-	IP        *string        `gorm:"column:ip;type:varchar(255)" json:"ip"`
-	ManagerIP string         `gorm:"column:manager_ip;type:varchar(255);not null" json:"managerIp"`
-	Port      *int32         `gorm:"column:port;type:int" json:"port"`
-	Key       *string        `gorm:"column:key;type:varchar(255)" json:"key"`
-	Status    *string        `gorm:"column:status;type:varchar(255)" json:"status"`
-	NodeType  *string        `gorm:"column:node_type;type:varchar(255)" json:"nodeType"`
-	Ipv4      *string        `gorm:"column:ipv4;type:varchar(255)" json:"ipv4"`
-	Ipv6      *string        `gorm:"column:ipv6;type:varchar(255)" json:"ipv6"`
-	Rate      float32        `gorm:"column:rate;type:float;not null;default:1" json:"rate"`
-	Protocol  int32          `gorm:"column:protocol;type:tinyint;not null;comment:0=TLS,1=TCP" json:"protocol"` // 0=TLS,1=TCP
-	Iepl      int32          `gorm:"column:iepl;type:tinyint;not null" json:"iepl"`
+	ID         int64          `gorm:"column:id;type:bigint unsigned;primaryKey;autoIncrement:true" json:"id"`
+	CreatedAt  *time.Time     `gorm:"column:created_at;type:datetime(3)" json:"createdAt"`
+	UpdatedAt  *time.Time     `gorm:"column:updated_at;type:datetime(3)" json:"updatedAt"`
+	DeletedAt  gorm.DeletedAt `gorm:"column:deleted_at;type:datetime(3);index:idx_nodes_deleted_at,priority:1" json:"deletedAt"`
+	NodeName   *string        `gorm:"column:node_name;type:varchar(255)" json:"nodeName"`
+	IP         *string        `gorm:"column:ip;type:varchar(255)" json:"ip"`
+	ManagerIP  string         `gorm:"column:manager_ip;type:varchar(255);not null" json:"managerIp"`
+	Port       *int32         `gorm:"column:port;type:int" json:"port"`
+	Key        *string        `gorm:"column:key;type:varchar(255)" json:"key"`
+	Status     *string        `gorm:"column:status;type:varchar(255)" json:"status"`
+	NodeType   *string        `gorm:"column:node_type;type:varchar(255)" json:"nodeType"`
+	Ipv4       *string        `gorm:"column:ipv4;type:varchar(255)" json:"ipv4"`
+	Ipv6       *string        `gorm:"column:ipv6;type:varchar(255)" json:"ipv6"`
+	Rate       float32        `gorm:"column:rate;type:float;not null;default:1" json:"rate"`
+	Protocol   int32          `gorm:"column:protocol;type:tinyint;not null;comment:0=TLS,1=TCP" json:"protocol"` // 0=TLS,1=TCP
+	Iepl       int32          `gorm:"column:iepl;type:tinyint;not null" json:"iepl"`
+	PreferIpv6 bool           `gorm:"column:prefer_ipv6;type:tinyint(1);not null;comment:建节点时勾的「默认走 IPv6」" json:"preferIpv6"` // 建节点时勾的「默认走 IPv6」
 }
 
 // TableName Node's table name

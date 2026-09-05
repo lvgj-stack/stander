@@ -121,6 +121,10 @@ func AddNode(ctx context.Context, r *req.AddNodeReq) (*resp.AddNodeResp, error) 
 		NodeType: &r.NodeType,
 		Rate:     r.Rate,
 		Status:   &status,
+		// Stored rather than only handed to the install command shown right
+		// now: that command gets reopened from the node list later, and
+		// nothing else records which address the agent was told to register.
+		PreferIpv6: r.DefaultIPv6,
 	}); err != nil {
 		return nil, err
 	}
