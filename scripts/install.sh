@@ -95,9 +95,15 @@ install_agent() {
   [ -n "$controller_addr" ] || die "缺少参数：控制面地址（controller-addr:port）"
   [ -n "$node_key" ] || die "缺少参数：节点密钥（node-key）"
 
-  local arch base tmp
+  local arch base
   arch="$(detect_arch)"
   base="$(asset_base)"
+  # `tmp` is deliberately not local. The EXIT trap below is evaluated when the
+  # script exits, by which point this function has returned and a local would
+  # be gone — under `set -u` the trap then dies with "tmp: unbound variable"
+  # and takes the exit status to 1. Every successful install used to end that
+  # way: an error line and a failure code after everything had worked, which
+  # through `curl | sudo bash` is all the operator sees.
   tmp="$(mktemp -d)"
   # EXIT rather than RETURN: die() calls exit, which would skip a RETURN trap
   # and leave the temp dir behind.
