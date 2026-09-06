@@ -48,6 +48,7 @@ func RunServer(ctx context.Context, c *config.Config, withWorker bool) error {
 			hlog.Errorf("closing database: %v", err)
 		}
 	}()
+	warnSeededPasswords(ctx)
 	utils.SetJWTSigningKey(c.Admin.JWTSigningKey)
 	// Captcha answers go to the database, not a process-local map, so a login
 	// can be verified by a different replica than the one that issued it.

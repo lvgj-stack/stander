@@ -217,6 +217,9 @@ INSERT INTO `profile` VALUES (1,0,'https://wpimg.wallstcn.com/f778738c-e4f8-4870
 -- 两个端，两个角色。ROLE_QA（质检员）是 naive-admin-go 模板留下的示例角色，
 -- 没有任何代码读它，随权限表一起删了。
 INSERT INTO `role` VALUES (1,'SUPER_ADMIN','超级管理员',1),(4,'USER','普通用户',1);
+-- 两个账号的口令都是 123456（md5，未加盐）。这个脚本在仓库里，所以它是公开的：
+-- 装完先改口令，两个都改。没改之前 `stander server` 每次启动都会在日志里点名，
+-- 见 internal/server/defaultpassword.go——那份检查按的就是下面这个哈希。
 INSERT INTO `user` (`id`,`username`,`password`,`enable`,`createTime`,`updateTime`) VALUES (1,'admin','e10adc3949ba59abbe56e057f20f883e',1,'2023-11-18 16:18:59.150632','2024-10-12 08:07:01.652188'),(3,'user01','e10adc3949ba59abbe56e057f20f883e',1,'2024-10-13 22:55:16.601588','2024-10-13 22:55:16.601588');
 -- admin -> 管理端，user01 -> 用户端。一个账号一行，admin 只挂 SUPER_ADMIN。
 -- 它曾经同时挂着 USER，为的是用右上角的「切换角色」预览用户端。那个接口连同

@@ -132,7 +132,26 @@ kubectl -n stander create secret generic stander-secrets \
 
 # 3. 改 overlays/prod 里的镜像 tag、Ingress host、数据库地址后部署
 kubectl apply -k deploy/k8s/overlays/prod
+
+# 4. 登录控制台，把 admin 和 user01 的口令都改掉（见下）
 ```
+
+> [!WARNING]
+> **第 4 步不是可选的。** `sql/init.sql` 建的 `admin` 和 `user01` 口令都是
+> `123456`，脚本在仓库里，这个口令对所有人都是已知的。一个暴露在公网的控制台在改口令
+> 之前，任何人都能用管理员身份登进去。
+>
+> 没改之前，`stander server` 每次启动都会点名还在用默认口令的账号：
+>
+> ```
+> 账号 admin、user01 还在用 sql/init.sql 里的默认口令（123456）。...
+> ```
+>
+> 想确认线上有没有这个问题，看一眼日志就够了：
+>
+> ```bash
+> kubectl -n stander logs deploy/stander-server | grep 默认口令
+> ```
 
 部署前可以先看渲染结果：
 
