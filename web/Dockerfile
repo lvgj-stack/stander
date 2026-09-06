@@ -14,7 +14,13 @@
 # The tags below stay exactly as upstream publishes them; only the host moves.
 ARG DOCKER_MIRROR=docker.io
 
-FROM ${DOCKER_MIRROR}/library/node:24-alpine AS build
+# --platform=$BUILDPLATFORM: this stage produces `dist/` — static JS and CSS,
+# byte-identical whatever architecture the final image is for. Without it the
+# arm64 variant runs pnpm install and the whole Vite build inside an emulated
+# arm64 container, which is both slow and pointless. It also means the build
+# runs once, not once per architecture, and the toolchain's native binaries
+# (rolldown/oxc) stay in this stage rather than being fetched twice.
+FROM --platform=$BUILDPLATFORM ${DOCKER_MIRROR}/library/node:24-alpine AS build
 
 WORKDIR /app
 
