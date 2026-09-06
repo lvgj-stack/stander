@@ -230,16 +230,31 @@ grep -q '验证码不正确' <<<"$login" || fail "unexpected login response: $lo
 # what a fresh database has to have: without SUPER_ADMIN nobody reaches the
 # admin side at all.
 log "Schema and seed data landed"
+# -h127.0.0.1, i.e. TCP, not the default unix socket. On the socket the two
+# sides disagree about where it is: mysqld in this pod comes up without reading
+# /etc/my.cnf — its pid-file and socket land under /var/lib/mysql, name
+# resolution stays on, errmsg.sys is looked for in the wrong place — while the
+# client `kubectl exec` starts does read that file and so goes looking in
+# /var/run/mysqld/mysqld.sock. Nothing is listening there:
+#
+#   ERROR 2002 (HY000): Can't connect to local MySQL server through socket
+#   '/var/run/mysqld/mysqld.sock' (2)
+#
+# TCP is also the transport the application uses, so this asks the database the
+# same way the thing under test does. deploy/docker-compose.yaml's healthcheck
+# avoids the socket for its own version of this reason.
+#
 # The password goes in MYSQL_PWD rather than -p because the client writes a
 # warning about command-line passwords to stderr, and the 2>/dev/null that used
-# to silence that warning silenced every real error with it. A `kubectl exec`
-# that failed then arrived here as an empty string, failed the comparison, and
-# was announced as a missing seed — a fault that did not happen, named in place
-# of the one that did, pointing whoever reads it at the wrong file.
+# to silence that warning silenced every real error with it. The socket failure
+# above spent every CI run since this job was written arriving here as an empty
+# string, failing the comparison, and being announced as a missing seed — a
+# fault that never happened, named in place of the one that did, pointing
+# whoever read it at sql/init.sql, which was fine all along.
 #
 # So: keep stderr, and say what came back.
 if ! roles=$(k -n "$NAMESPACE" exec deploy/mysql -c mysql -- \
-  env MYSQL_PWD=stander mysql -ustander -Dstander -N -B -e \
+  env MYSQL_PWD=stander mysql -h127.0.0.1 -ustander -Dstander -N -B -e \
   "select count(*) from role where code in ('SUPER_ADMIN','USER')" 2>&1); then
   fail "could not ask the database for the seeded roles: $roles"
 fi
