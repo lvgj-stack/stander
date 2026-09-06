@@ -127,29 +127,48 @@ tag 来自版本标签（`v1.2.3` → `1.2.3`），手动触发时用 commit 短
 `gh release upload --clobber` 挂上去。`scripts/install.sh` 就按机器架构从这里下载并
 校验，所以产物名字要和脚本对齐。
 
+## 版本号
+
+`v<major>.<minor>.<patch>`，预览版在后面加 `-alpha.N` 或 `-beta.N`：
+
+```
+v0.1.0-alpha.1    还在动，接口和数据结构都可能改，只给愿意跟着改的人
+v0.1.0-beta.1     功能齐了，等的是真实环境里的问题
+v0.1.0            正式版
+```
+
+同一个 `v0.1.0` 下 alpha 和 beta 各自从 1 开始递增，正式版发出去之后这个号码归零，
+下一轮从 `v0.2.0-alpha.1` 开始。
+
+**带连字符的就是预览版。** 这是 semver 自己的规则，CI 也就照这一条判断，不另立名单：
+往后想加 `-rc.1` 直接加，不用改 workflow。
+
 ### 发一个预览版
 
 ```bash
-git tag v0.1.0-rc.1 && git push origin v0.1.0-rc.1
+git tag v0.1.0-alpha.1 && git push origin v0.1.0-alpha.1
 ```
 
-带连字符的 tag 走的是预览版那条路：镜像只有 `:0.1.0-rc.1`，`:latest` 不动；
-Release 建出来带 prerelease 标记。
+会发生的事：两个镜像推成 `:0.1.0-alpha.1`，**`:latest` 不动**；GitHub Release 建出来
+并标成 prerelease，agent 二进制和 `SHA256SUMS` 挂在上面。
 
-预览版和安装脚本之间有一处必须知道的联动：GitHub 的 `/releases/latest`
-**不含 prerelease**，而 `scripts/install.sh` 默认就是从那里下载的。所以控制台给出的
-那条安装命令，在「只有预览版、还没有正式版」的仓库上会 404。脚本因此多了一条**只在
-这条默认路径失败之后**才走的回退：查一次 API 拿最新的 release（含预览版）再下一次。
-一旦有了正式版，重定向就能解析，这条回退再也不会被走到，预览版也就不会盖过正式版。
+**不会**发生的事：不部署。预览版存在的意义是让人主动挑着装，推 tag 就滚上 prod 等于把
+每个预览版都变成一次换了名字的正式发布。要把某个预览版部到集群上，去 Actions 页面手动
+触发这个 workflow 并选环境——手动触发一定部署，那正是手动触发的意思。
+
+### 预览版和安装脚本的联动
+
+GitHub 的 `/releases/latest` **不含 prerelease**，而 `scripts/install.sh` 默认就是从
+那里下载的。所以在「只发过预览版、还没有正式版」的仓库上，控制台给出的那条安装命令会
+404。脚本因此有一条**只在这条默认路径失败之后**才走的回退：查一次 API 拿最新的 release
+（含预览版）再下一次。一旦有了正式版，重定向就能解析，这条回退再也走不到，预览版也就
+不会盖过正式版。
 
 要装某个指定版本，绕开这套判断：
 
 ```bash
-curl -fsSL .../install.sh | sudo STANDER_VERSION=v0.1.0-rc.1 bash -s -- <addr> <key>
+curl -fsSL .../install.sh | sudo STANDER_VERSION=v0.1.0-alpha.1 bash -s -- <addr> <key>
 ```
-
-注意 `deploy` job 不看预览版标记：推任何 `v*` tag 都会往 prod 滚一次。预览版不想上
-prod，就用 `workflow_dispatch` 选 `dev`，或者给 prod 环境配上 required reviewers。
 
 **deploy** — 把 overlay 的 `images` 块改写成刚推的镜像，渲染、`kubectl diff`
 展示变更、apply、然后等三个 Deployment 全部 rollout 完成。任何一个没起来就
