@@ -18,6 +18,27 @@ GOPROXY=https://goproxy.cn,direct docker compose -f deploy/docker-compose.yaml u
 宿主机 `go env` 里的 GOPROXY 不算数：那份配置在 `~/.config/go/env` 里，构建
 容器读不到。`scripts/e2e-kind.sh` 用的是同一个开关。
 
+基础镜像同理。Docker Hub 对匿名拉取按出口 IP 限流，共享出口下额度经常不是自己用掉
+的，构建会停在解析 manifest 那一步——一层都还没下就 429：
+
+```
+failed to resolve source metadata for docker.io/nginxinc/nginx-unprivileged:
+unexpected status from HEAD request ...: 429 Too Many Requests
+```
+
+换个 pull-through 镜像源，compose 会把它传给两个镜像的构建，MySQL 也跟着走：
+
+```bash
+DOCKER_MIRROR=mirror.gcr.io docker compose -f deploy/docker-compose.yaml up -d --build
+```
+
+只换 registry 主机，tag 还是上游那个。`scripts/e2e-kind.sh` 和两个 Dockerfile
+（`--build-arg DOCKER_MIRROR=...`）认同一个变量。后端的运行时镜像在 gcr.io 上，
+不限流，所以是写死的。
+
+要长期解决就别走匿名：`docker login` 之后额度按账号算，或者在
+`/etc/docker/daemon.json` 里配 `registry-mirrors`，那样对所有项目一次生效。
+
 CI/CD 见 [cicd.md](cicd.md)。每个 PR 都会把整套清单部署到一个真实的 kind 集群上
 跑一遍，所以这里写的步骤是被机器验证过的，不是纸面流程。
 
@@ -91,7 +112,8 @@ docker build -t your-registry/stander-web:0.1.0 ./web
 ```
 
 后端镜像是 distroless static + nonroot，约 35MB；控制台镜像是 nginx + 静态文件，
-约 50MB。在国内网络下给后端加 `--build-arg GOPROXY=https://goproxy.cn,direct`。
+约 50MB。在国内网络下给后端加 `--build-arg GOPROXY=https://goproxy.cn,direct`；
+拉不动 Docker Hub 时两条命令都加 `--build-arg DOCKER_MIRROR=mirror.gcr.io`。
 
 **两个镜像用同一个 tag。** 控制台和它调用的 API 版本对不上不是一个值得支持的状态，
 流水线也是这么做的。

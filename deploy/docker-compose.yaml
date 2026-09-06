@@ -3,7 +3,9 @@
 # deploy/k8s and docs/deployment.md.
 services:
   mysql:
-    image: mysql:8.0
+    # 显式写出 registry，好在拉不动 Docker Hub 时整套栈换同一个镜像源，见下面
+    # stander 那段的 DOCKER_MIRROR。
+    image: ${DOCKER_MIRROR:-docker.io}/library/mysql:8.0
     environment:
       MYSQL_ROOT_PASSWORD: stander
       MYSQL_DATABASE: stander
@@ -33,6 +35,11 @@ services:
         #   GOPROXY=https://goproxy.cn,direct docker compose ... up -d --build
         # 走 args 而不是让人每次敲 --build-arg，是因为 `up --build` 不收这个参数。
         GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
+        # Docker Hub 对匿名拉取按出口 IP 限流，额度用完时构建在解析 manifest 那步
+        # 就 429 了（"toomanyrequests"，一层都还没下）。换个 pull-through 镜像源：
+        #   DOCKER_MIRROR=mirror.gcr.io docker compose ... up -d --build
+        # 和 GOPROXY 一样走 args：`up --build` 不收 --build-arg。
+        DOCKER_MIRROR: ${DOCKER_MIRROR:-docker.io}
     environment:
       STANDER_DATABASE_ADDR: mysql:3306
       STANDER_DATABASE_USERNAME: root
@@ -58,6 +65,8 @@ services:
     build:
       context: ../web
       dockerfile: Dockerfile
+      args:
+        DOCKER_MIRROR: ${DOCKER_MIRROR:-docker.io}
     environment:
       # nginx reverse-proxies /auth, /user, /role and /stander to
       # the backend, so the app and the API share an origin. That is what keeps

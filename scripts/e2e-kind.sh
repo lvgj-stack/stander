@@ -32,6 +32,10 @@ KIND_NODE_IMAGE="${KIND_NODE_IMAGE:-kindest/node:v1.32.2}"
 # Passed through to the Go image build. Override on a network that cannot reach
 # proxy.golang.org: GOPROXY=https://goproxy.cn,direct scripts/e2e-kind.sh
 GOPROXY="${GOPROXY:-https://proxy.golang.org,direct}"
+# Same idea for the base images: Docker Hub rate-limits anonymous pulls per
+# source IP, so point the builds at a pull-through mirror when the budget for
+# this egress is gone: DOCKER_MIRROR=mirror.gcr.io scripts/e2e-kind.sh
+DOCKER_MIRROR="${DOCKER_MIRROR:-docker.io}"
 NAMESPACE=stander-dev
 IMAGE_TAG="${IMAGE_TAG:-e2e}"
 KEEP_CLUSTER="${KEEP_CLUSTER:-}"
@@ -91,8 +95,10 @@ log "Building images ($IMAGE_TAG)"
 docker build -q -t "stander:$IMAGE_TAG" \
   --build-arg VERSION="$IMAGE_TAG" \
   --build-arg GOPROXY="$GOPROXY" \
+  --build-arg DOCKER_MIRROR="$DOCKER_MIRROR" \
   --build-arg COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)" .
-docker build -q -t "stander-web:$IMAGE_TAG" ./web
+docker build -q -t "stander-web:$IMAGE_TAG" \
+  --build-arg DOCKER_MIRROR="$DOCKER_MIRROR" ./web
 
 log "Creating kind cluster $CLUSTER_NAME"
 if kind get clusters 2>/dev/null | grep -qx "$CLUSTER_NAME"; then

@@ -5,7 +5,16 @@
 # call same-origin paths, which whatever fronts this image — the nginx config
 # below under docker compose, or the Ingress under Kubernetes — routes to the
 # backend. That keeps the captcha's session cookie same-origin.
-FROM node:24-alpine AS build
+
+# Both base images come from Docker Hub, which rate-limits anonymous pulls per
+# source IP (429 "toomanyrequests" while resolving the manifest, before a single
+# layer is fetched). Behind shared egress that budget is not ours to spend, so
+# the registry is a build-arg: point it at a pull-through mirror.
+#   --build-arg DOCKER_MIRROR=mirror.gcr.io
+# The tags below stay exactly as upstream publishes them; only the host moves.
+ARG DOCKER_MIRROR=docker.io
+
+FROM ${DOCKER_MIRROR}/library/node:24-alpine AS build
 
 WORKDIR /app
 
@@ -23,7 +32,7 @@ RUN pnpm build
 # The unprivileged variant, not plain nginx: it runs as uid 101 and listens on
 # 8080, which is what lets the Kubernetes Deployment use the same
 # runAsNonRoot / readOnlyRootFilesystem settings as the Go workloads.
-FROM nginxinc/nginx-unprivileged:1.27-alpine
+FROM ${DOCKER_MIRROR}/nginxinc/nginx-unprivileged:1.27-alpine
 
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/templates/default.conf.template

@@ -1,6 +1,14 @@
-# syntax=docker/dockerfile:1
+# No `# syntax=` directive on purpose: it names an image that BuildKit fetches
+# from Docker Hub before it parses anything, so no build-arg can redirect it —
+# and on a rate-limited egress that fetch is exactly what fails. Nothing here
+# needs a newer frontend than BuildKit's built-in one.
 
-FROM golang:1.25-alpine AS build
+# Docker Hub rate-limits anonymous pulls per source IP; override the registry to
+# build through a pull-through mirror: --build-arg DOCKER_MIRROR=mirror.gcr.io
+# The runtime image below is on gcr.io, which has no such limit, so it is fixed.
+ARG DOCKER_MIRROR=docker.io
+
+FROM ${DOCKER_MIRROR}/library/golang:1.25-alpine AS build
 WORKDIR /src
 
 # Overridable so the image can be built behind a corporate or regional module
