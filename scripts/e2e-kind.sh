@@ -48,7 +48,15 @@ cd "$REPO_ROOT"
 MYSQL_IMAGE="$(awk '/^ *image: mysql:/ {print $2; exit}' deploy/k8s/overlays/dev/mysql.yaml)"
 
 log() { printf '\n\033[1;34m==>\033[0m %s\n' "$*"; }
-fail() { printf '\033[1;31mFAIL:\033[0m %s\n' "$*" >&2; exit 1; }
+# Under Actions the reason also goes out as a workflow error, which puts it on
+# the run's summary page. Otherwise it exists only in the step log, and reading
+# that needs push access to the repository — so the one person most likely to
+# be looking at a red build from the outside is the one who cannot see why.
+fail() {
+  printf '\033[1;31mFAIL:\033[0m %s\n' "$*" >&2
+  if [ -n "${GITHUB_ACTIONS:-}" ]; then printf '::error::%s\n' "$*"; fi
+  exit 1
+}
 
 for tool in docker kind kubectl; do
   command -v "$tool" >/dev/null || fail "$tool is required but not on PATH"
@@ -222,10 +230,20 @@ grep -q '验证码不正确' <<<"$login" || fail "unexpected login response: $lo
 # what a fresh database has to have: without SUPER_ADMIN nobody reaches the
 # admin side at all.
 log "Schema and seed data landed"
-k -n "$NAMESPACE" exec deploy/mysql -- \
-  mysql -ustander -pstander -Dstander -N -B -e \
-  "select count(*) from role where code in ('SUPER_ADMIN','USER')" 2>/dev/null \
-  | tr -d '[:space:]' | grep -qx 2 \
-  || fail "sql/init.sql did not seed the SUPER_ADMIN / USER roles"
+# The password goes in MYSQL_PWD rather than -p because the client writes a
+# warning about command-line passwords to stderr, and the 2>/dev/null that used
+# to silence that warning silenced every real error with it. A `kubectl exec`
+# that failed then arrived here as an empty string, failed the comparison, and
+# was announced as a missing seed — a fault that did not happen, named in place
+# of the one that did, pointing whoever reads it at the wrong file.
+#
+# So: keep stderr, and say what came back.
+if ! roles=$(k -n "$NAMESPACE" exec deploy/mysql -c mysql -- \
+  env MYSQL_PWD=stander mysql -ustander -Dstander -N -B -e \
+  "select count(*) from role where code in ('SUPER_ADMIN','USER')" 2>&1); then
+  fail "could not ask the database for the seeded roles: $roles"
+fi
+[ "$(tr -d '[:space:]' <<<"$roles")" = 2 ] \
+  || fail "sql/init.sql did not seed the SUPER_ADMIN / USER roles (query returned: $roles)"
 
 log "All checks passed"
