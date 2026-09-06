@@ -164,6 +164,13 @@ export function NodeFormDialog({ open, onOpenChange, node, onCreated }: NodeForm
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>节点类型</FormLabel>
+                  {/* `nodeType` collides with a form-element property the same
+                      way `nodeName` does, and is harmless only because this
+                      Select never reaches the DOM under that name: Radix emits
+                      a native control for a Select solely to carry a `name`,
+                      and this one is not given one. Passing `name` here makes
+                      the collision real — form-control-names.test.tsx is what
+                      would catch it. */}
                   <Select
                     value={field.value}
                     onValueChange={field.onChange}

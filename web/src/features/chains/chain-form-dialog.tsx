@@ -39,7 +39,7 @@ import { orEmpty } from '@/lib/format'
 import type { Chain } from '@/types/api'
 
 const schema = z.object({
-  name: z.string().min(1, '请输入链路名称'),
+  chainName: z.string().min(1, '请输入链路名称'),
   port: z
     .number({ error: '请输入端口' })
     .int('端口必须是整数')
@@ -76,13 +76,13 @@ export function ChainFormDialog({ open, onOpenChange, chain }: ChainFormDialogPr
 
   const form = useForm<ChainValues>({
     resolver: zodResolver(schema),
-    defaultValues: { name: '', port: 0, nodeId: 0, chainType: 'TLS', preferIpv6: false },
+    defaultValues: { chainName: '', port: 0, nodeId: 0, chainType: 'TLS', preferIpv6: false },
   })
 
   useEffect(() => {
     if (!open) return
     form.reset({
-      name: chain?.chainName ?? '',
+      chainName: chain?.chainName ?? '',
       port: chain?.port ?? 0,
       nodeId: chain?.nodeId ?? 0,
       chainType: (chain?.protocol as 'TLS' | 'TCP') ?? 'TLS',
@@ -92,9 +92,9 @@ export function ChainFormDialog({ open, onOpenChange, chain }: ChainFormDialogPr
 
   const mutation = useActionMutation({
     mutationFn: async (values: ChainValues) => {
-      if (chain) return editChain(chain.id, values.name)
+      if (chain) return editChain(chain.id, values.chainName)
       return addChain({
-        Name: values.name,
+        Name: values.chainName,
         Port: values.port,
         NodeId: values.nodeId,
         ChainType: values.chainType,
@@ -126,7 +126,7 @@ export function ChainFormDialog({ open, onOpenChange, chain }: ChainFormDialogPr
           >
             <FormField
               control={form.control}
-              name="name"
+              name="chainName"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>链路名称</FormLabel>
