@@ -52,8 +52,13 @@ func checkUserNodePermission(ctx context.Context, nodeIds ...int64) error {
 // deployment has neither.
 //
 // These strings are a contract with the console, which maps them to 未注册 /
-// 已注册; the tests on both sides assert the literals. On what the column held
-// before it had any writer at all, see sql/migrate-2026-09-05-node-status.sql.
+// 已注册; the tests on both sides assert the literals.
+//
+// The column had no writer at all before this: its DDL default was the string
+// '8123' — a port that once got written into the status column — so every node
+// carried that as its status from the day it was created. A row can therefore
+// still hold something that is neither of these two, which is why the console
+// renders anything unrecognised as an em dash instead of raw.
 const (
 	nodeStatusUnregistered = "unregistered"
 	nodeStatusRegistered   = "registered"

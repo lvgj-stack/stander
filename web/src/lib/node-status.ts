@@ -30,10 +30,11 @@ const LABELS: Record<NodeStatus, string> = {
 /**
  * How to label a status, including the ones a database can still hold.
  *
- * Anything unrecognised renders as an em dash rather than raw, which is what
- * keeps the old fabricated value off the screen on a deployment that has not
- * yet run `sql/migrate-2026-09-05-node-status.sql`. An em dash says what is
- * actually known about such a row: nothing.
+ * Anything unrecognised renders as an em dash rather than raw. The column used
+ * to default to the string '8123' with nothing ever writing it, so a row can
+ * still hold a value that means nothing, and an em dash says what is actually
+ * known about such a row: nothing. Printing it raw is how a port number ended
+ * up on screen as a node's status in the first place.
  */
 export function nodeStatusLabel(status: string | null | undefined): string {
   return LABELS[status as NodeStatus] ?? EMPTY

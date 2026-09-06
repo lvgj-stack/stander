@@ -236,8 +236,8 @@ select username, count(*) from user group by username having count(*) > 1;
 ```
 
 原来还有 `permission` 和 `role_permissions_permission` 两张表，存的是上一版 Vue
-前端的菜单树。前端不再按它建路由，两张表也就没有了读者，已经删掉；已有的库用
-`sql/migrate-2026-09-05-two-sides.sql` 清理。
+前端的菜单树。前端不再按它建路由，两张表也就没有了读者，已经删掉，`sql/init.sql`
+里不再建它们。
 
 ## 前端
 

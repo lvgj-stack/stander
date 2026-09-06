@@ -70,7 +70,7 @@ service 层一直在强制执行。
 
 菜单和路由都在前端代码里（`web/src/routes/index.tsx` 加两个 nav 常量）。加页面
 不需要往数据库里补记录；早先那套由 `permission` 表在运行时生成菜单和 tab 的机制
-已经删掉，已有的库用 `sql/migrate-2026-09-05-two-sides.sql` 清理。
+已经删掉，`sql/init.sql` 里也没有那两张表。
 
 ## 部署到 Kubernetes
 
@@ -104,8 +104,7 @@ API 无状态、可任意扩副本；`stander worker` 是单例，必须恰好�
 | `internal/captcha/` | 数据库支撑的验证码存储（多副本可用） |
 | `internal/observability/` | Prometheus 指标与结构化日志 |
 | `web/` | 控制台前端（React + shadcn/ui；管理端与用户端在同一份静态站点里） |
-| `sql/init.sql` | 建表与初始数据 |
-| `sql/migrate-*.sql` | 针对已有库的一次性迁移，新库不需要 |
+| `sql/init.sql` | 建表与初始数据（建库只有这一个脚本） |
 | `deploy/` | Dockerfile 编排、Kubernetes 清单 |
 | `.github/workflows/` | CI 与发布流水线 |
 | `scripts/e2e-kind.sh` | 在 kind 集群上部署并验证整套系统（CI 跑的就是它） |
@@ -132,16 +131,9 @@ API 无状态、可任意扩副本；`stander worker` 是单例，必须恰好�
 
 ## 升级提示
 
-从动态菜单迁到两个端（已有的库）：
-
-```bash
-mysqldump -u root -p stander permission role_permissions_permission > /tmp/perm-backup.sql
-mysql -u root -p stander < sql/migrate-2026-09-05-two-sides.sql
-```
-
-会删掉 `permission` 和 `role_permissions_permission` 两张表，以及示例角色
-`ROLE_QA`（挂在它下面的账号先归还给 `USER`）。不跑也不会坏——后端已经不读这两张
-表了——只是留着两张没人用的表。
+建库只有一个脚本：`sql/init.sql`。`v0.1.0-alpha.1` 是第一个发出去的版本，在它之前
+没有别人跑着的库，所以此前那几个 `migrate-*.sql` 的结果全都并进了 init.sql，脚本本身
+删掉了。往后每个改库结构的版本会带自己的迁移脚本。
 
 从合仓前的两个进程迁移：控制台和控制面原来是两个端口两个进程，现在是一个端口：
 

@@ -163,8 +163,8 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVSUQiOjEsImV4cCI6M
   路径里的角色名重新签一个 token，而中间件把它直接抄进 `identity.Principal`
   ——少一个必须写对的校验，比写对它更省心。
 
-已有的库用 `sql/migrate-2026-09-05-two-sides.sql` 清理 permission 两张表。
-`role` / `user_roles_role` 两张表还在用，它们是"这个账号属于哪个端"的存储。
+permission 两张表已经不在 `sql/init.sql` 里了。`role` / `user_roles_role` 两张表
+还在用，它们是"这个账号属于哪个端"的存储。
 
 ### 用户-列表 get : /api/user  **仅管理员**
 

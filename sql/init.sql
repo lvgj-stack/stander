@@ -34,8 +34,8 @@ create table if not exists nodes
     protocol   tinyint      default 0      not null comment '0=TLS,1=TCP',
     iepl       tinyint      default 0      not null,
     -- 安装命令要按它决定加不加 --prefer-ipv6，而安装命令在节点建好之后还会被再打开，
-    -- 所以这个选择必须跟着节点存下来。列注释要和迁移脚本里的一字不差：产物是从库里
-    -- 反向生成的，注释不一样就会生成出不一样的 tag。
+    -- 所以这个选择必须跟着节点存下来。改这里的列注释就要跟着跑一次 `stander gen`：
+    -- internal/model 是从库里反向生成的，注释不一样就会生成出不一样的 tag。
     prefer_ipv6 tinyint(1) default 0       not null comment '建节点时勾的「默认走 IPv6」'
 );
 
@@ -222,6 +222,4 @@ INSERT INTO `user` (`id`,`username`,`password`,`enable`,`createTime`,`updateTime
 -- 它曾经同时挂着 USER，为的是用右上角的「切换角色」预览用户端。那个接口连同
 -- 「一个账号可以有多个角色」一起删了，这一行于是没有任何读者：登录只看有没有
 -- SUPER_ADMIN，多出来的 USER 既不改变进哪个端，也不放开任何东西。
--- 已有的库由 migrate-2026-09-05-two-sides.sql 删掉这类多余的行，两种装法的
--- admin 因此行为一致。
 INSERT INTO `user_roles_role` VALUES (1,1),(3,4);
