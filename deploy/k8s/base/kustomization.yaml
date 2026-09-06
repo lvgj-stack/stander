@@ -16,10 +16,16 @@ labels:
       app.kubernetes.io/name: stander
       app.kubernetes.io/part-of: stander
 
-# Two images, bumped together. CI rewrites both tags with the commit SHA it
-# built; see docs/cicd.md.
+# Two images, bumped together: the console and the API it calls are never run
+# at different versions.
+#
+# No registry here on purpose. The dev overlay builds on this base, and its
+# images are side-loaded into kind under these bare names by
+# scripts/e2e-kind.sh; a newName would send that lookup to a registry the kind
+# node cannot reach. The overlays that pull from one say so themselves —
+# overlays/prod and k8s/agent.
 images:
   - name: stander
-    newTag: 0.1.0
+    newTag: 0.0.1-alpha.1
   - name: stander-web
-    newTag: 0.1.0
+    newTag: 0.0.1-alpha.1

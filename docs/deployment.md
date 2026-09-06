@@ -154,6 +154,7 @@ kubectl -n stander create secret generic stander-secrets \
   --from-literal=STANDER_ADMIN_JWTSIGNINGKEY="$(openssl rand -base64 32)"
 
 # 3. 改 overlays/prod 里的镜像 tag、Ingress host、数据库地址后部署
+#    （fork 的话镜像 newName 里的 owner 也要改成自己的）
 kubectl apply -k deploy/k8s/overlays/prod
 
 # 4. 登录控制台，把 admin 和 user01 的口令都改掉（见下）

@@ -39,11 +39,20 @@ generatorOptions:
 #     --from-literal=STANDER_DATABASE_PASSWORD=... \
 #     --from-literal=STANDER_ADMIN_JWTSIGNINGKEY=...
 
-# CI rewrites both tags to the SHA it built. Keeping them in the overlay (not
-# only in base) is what lets a deploy pin prod to a specific build without
-# touching base.
+# What prod is running. This block is the record of it: nothing rewrites it at
+# deploy time, so what is in git is what is on the cluster. Bumping a version
+# means editing these two tags and applying — see docs/deployment.md.
+#
+# The registry lives here and not in base because base is also what the dev
+# overlay builds on, and dev's images are side-loaded into kind under their bare
+# names by scripts/e2e-kind.sh. A newName in base would send that lookup to a
+# registry the kind node cannot reach.
+#
+# Change the owner when deploying a fork; it is not derived from anything.
 images:
   - name: stander
-    newTag: 0.1.0
+    newName: ghcr.io/lvgj-stack/stander
+    newTag: 0.0.1-alpha.1
   - name: stander-web
-    newTag: 0.1.0
+    newName: ghcr.io/lvgj-stack/stander-web
+    newTag: 0.0.1-alpha.1

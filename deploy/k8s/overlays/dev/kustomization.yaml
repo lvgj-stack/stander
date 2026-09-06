@@ -14,17 +14,17 @@ patches:
       kind: Deployment
       name: stander-server
 
-# Dev runs everything in one pod: the server keeps its in-process worker, so
-# the separate worker Deployment is scaled to zero rather than deleted (keeping
-# it makes the difference from prod visible in `kubectl get deploy`).
+  # Dev runs everything in one pod: the server keeps its in-process worker, so
+  # the separate worker Deployment is scaled to zero rather than deleted (keeping
+  # it makes the difference from prod visible in `kubectl get deploy`).
   - path: no-worker.yaml
     target:
       kind: Deployment
       name: stander-worker
 
-# One console replica is plenty on a laptop cluster. It needs its own patch
-# rather than reusing single-replica.yaml, which also rewrites the container
-# args — the web container has none.
+  # One console replica is plenty on a laptop cluster. It needs its own patch
+  # rather than reusing single-replica.yaml, which also rewrites the container
+  # args — the web container has none.
   - path: web-single-replica.yaml
     target:
       kind: Deployment
@@ -51,8 +51,13 @@ generatorOptions:
 # There is no Ingress in dev, so the console is reached by port-forwarding to
 # the stander-web Service and nginx proxies the API to stander itself. That is
 # the same path docker compose takes, which makes it worth exercising here.
+#
+# Bare names, no registry: scripts/e2e-kind.sh builds these locally and
+# side-loads them into the kind node, then rewrites only the tags here. A
+# newName would make the kubelet try to pull instead, and the kind node has no
+# credentials and no route to GHCR.
 images:
   - name: stander
-    newTag: 0.1.0
+    newTag: 0.0.1-alpha.1
   - name: stander-web
-    newTag: 0.1.0
+    newTag: 0.0.1-alpha.1
