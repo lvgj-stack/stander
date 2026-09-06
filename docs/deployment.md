@@ -118,6 +118,29 @@ docker build -t your-registry/stander-web:0.1.0 ./web
 **两个镜像用同一个 tag。** 控制台和它调用的 API 版本对不上不是一个值得支持的状态，
 流水线也是这么做的。
 
+### 升到一个新版本
+
+流水线只负责把镜像推到 GHCR，滚到集群上这一步是手动的——它是一个单独的决定，见
+[cicd.md](cicd.md#部署不在流水线里)。改 overlay 再 apply，让 git 里那个值和线上一致：
+
+```bash
+# deploy/k8s/overlays/prod/kustomization.yaml 的 images 块里把 newTag 改成新版本，
+# 三个 workload 用的是同两个镜像，所以只有两处要改。
+kubectl diff -k deploy/k8s/overlays/prod      # 先看会变什么
+kubectl apply -k deploy/k8s/overlays/prod
+
+for d in stander-server stander-web stander-worker; do
+  kubectl -n stander rollout status "deploy/$d" --timeout=300s
+done
+```
+
+`rollout status` 不能省：没有它，一个还在 crash-loop 的部署看起来和成功的一样。
+有 Pod 起不来就回滚：
+
+```bash
+kubectl -n stander rollout undo deploy/stander-server
+```
+
 ### 部署到生产
 
 ```bash

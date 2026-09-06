@@ -1,24 +1,22 @@
-# Builds and publishes the two container images, then rolls them out.
+# Builds and publishes the two container images and the agent binaries.
 #
-# Triggered by a version tag, or by hand from the Actions tab when a specific
-# commit needs to go out.
+# It publishes; it does not deploy. Rolling the new images onto a cluster is a
+# separate decision made by a person — see docs/deployment.md.
+#
+# Triggered by a version tag, or by hand from the Actions tab when the images
+# for a specific commit are wanted without tagging a version.
 name: release
 
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
-    inputs:
-      environment:
-        description: Which environment to deploy
-        type: choice
-        options: [prod, dev]
-        default: prod
-        required: true
 
 concurrency:
-  # Never two rollouts at once against the same cluster.
-  group: release-${{ github.event.inputs.environment || 'prod' }}
+  # Keyed on the ref, so re-running a tag does not race with itself. Not
+  # cancel-in-progress: a half-pushed manifest list or a Release with only some
+  # of its assets is worse than waiting.
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -39,9 +37,9 @@ jobs:
     steps:
       - name: Work out the tag
         id: meta
-        # Its own job because the three jobs below all need the same answer,
-        # and "is this a preview?" in particular must have exactly one place to
-        # live: it decides both whether `:latest` moves and whether the GitHub
+        # Its own job because both jobs below need the same answer, and "is
+        # this a preview?" in particular must have exactly one place to live:
+        # it decides both whether `:latest` moves and whether the GitHub
         # Release is marked as a prerelease. Those two disagreeing is precisely
         # how a preview becomes what an unpinned install picks up.
         #
@@ -131,7 +129,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: meta
     # Only a version tag gets a GitHub Release to attach assets to; a manual
-    # workflow_dispatch deploy has no release to upload into.
+    # workflow_dispatch run has no release to upload into.
     if: github.ref_type == 'tag'
     permissions:
       contents: write
@@ -198,104 +196,3 @@ jobs:
             dist/stander_linux_arm64 \
             dist/SHA256SUMS \
             --clobber
-
-  deploy:
-    name: deploy to kubernetes
-    runs-on: ubuntu-latest
-    needs: [meta, images]
-    # A preview tag publishes; it does not deploy. `v0.1.0-beta.1` exists to be
-    # installed on purpose by someone who chose it, and rolling it onto prod
-    # the moment it is tagged is the opposite of that — it would make every
-    # preview a production release with a quieter name.
-    #
-    # Images and binaries are still built and published, so a preview can be
-    # deployed deliberately: run the workflow by hand from the Actions tab and
-    # pick an environment. A manual run always deploys, which is the whole
-    # point of asking for one.
-    if: github.event_name == 'workflow_dispatch' || needs.meta.outputs.prerelease == 'false'
-    environment: ${{ github.event.inputs.environment || 'prod' }}
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Configure cluster access
-        # A kubeconfig scoped to the stander namespace, stored as an
-        # environment secret so the prod environment can require a reviewer.
-        #
-        # The secret arrives through env rather than being interpolated into
-        # the script text: an expression expanded inline becomes part of the
-        # command, where a stray `set -x` or a shell trace would print it.
-        env:
-          KUBECONFIG_B64: ${{ secrets.KUBECONFIG }}
-        run: |
-          if [ -z "$KUBECONFIG_B64" ]; then
-            echo "::error::KUBECONFIG secret is not set for this environment."
-            exit 1
-          fi
-          mkdir -p ~/.kube
-          printf '%s' "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
-          chmod 600 ~/.kube/config
-          echo "Deploying to: $(kubectl config current-context)"
-
-      - name: Point the overlay at the images just pushed
-        working-directory: deploy/k8s/overlays/${{ github.event.inputs.environment || 'prod' }}
-        run: |
-          registry="${{ env.REGISTRY }}/${{ needs.meta.outputs.owner }}"
-          tag="${{ needs.meta.outputs.tag }}"
-          # `kustomize edit` is not available here, so the images block is
-          # rewritten in place. It is checked afterwards by rendering it.
-          python3 - "$registry" "$tag" <<'PY'
-          import pathlib, re, sys
-          registry, tag = sys.argv[1], sys.argv[2]
-          p = pathlib.Path('kustomization.yaml')
-          text = p.read_text()
-          for name in ('stander-web', 'stander'):
-              text = re.sub(
-                  rf'(- name: {re.escape(name)}\n)(\s+)(?:newName: \S+\n\s+)?newTag: \S+',
-                  rf'\g<1>\g<2>newName: {registry}/{name}\n\g<2>newTag: {tag}',
-                  text,
-                  count=1,
-              )
-          p.write_text(text)
-          PY
-          cat kustomization.yaml
-
-      - name: Render and show what will change
-        run: |
-          kubectl kustomize deploy/k8s/overlays/${{ github.event.inputs.environment || 'prod' }} \
-            | tee /tmp/rendered.yaml | grep -E '^\s+image:'
-          kubectl diff -f /tmp/rendered.yaml || true
-
-      - name: Apply
-        run: kubectl apply -f /tmp/rendered.yaml
-
-      - name: Wait for the rollout
-        # Every workload has to come back healthy. Without this the job goes
-        # green while pods are still crash-looping.
-        #
-        # The namespace is read out of the rendered manifests, not out of the
-        # kubeconfig: the overlay is what decides where this goes (`stander`
-        # for prod, `stander-dev` for dev), and a kubeconfig with no namespace
-        # set would otherwise send the check to the wrong place and pass.
-        run: |
-          ns=$(grep -m1 '^  namespace: ' /tmp/rendered.yaml | awk '{print $2}')
-          [ -n "$ns" ] || { echo "::error::could not determine namespace"; exit 1; }
-          echo "namespace=$ns" >> "$GITHUB_ENV"
-          echo "Waiting on rollouts in $ns"
-          for d in stander-server stander-web stander-worker; do
-            echo "::group::$d"
-            kubectl -n "$ns" rollout status "deploy/$d" --timeout=300s
-            echo "::endgroup::"
-          done
-
-      - name: Roll back if the rollout failed
-        if: failure()
-        run: |
-          ns="${namespace:-}"
-          if [ -z "$ns" ]; then
-            echo "::error::Deploy failed before the namespace was known; nothing rolled back."
-            exit 1
-          fi
-          for d in stander-server stander-web stander-worker; do
-            kubectl -n "$ns" rollout undo "deploy/$d" || true
-          done
-          echo "::error::Rollout failed in $ns; undo issued for all three Deployments."

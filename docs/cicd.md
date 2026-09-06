@@ -1,11 +1,15 @@
 # CI/CD
 
-两条流水线，都跑在 GitHub Actions 上，都以 Kubernetes 为部署目标。
+两条流水线，都跑在 GitHub Actions 上。
 
 | 工作流 | 触发 | 做什么 |
 |---|---|---|
 | `ci.yml` | push 到 main、所有 PR | Go 检查、前端检查、清单校验，最后在真实 k8s 集群上跑端到端 |
-| `release.yml` | 打 `v*` 标签，或手动触发 | 构建并推送两个镜像到 GHCR，然后滚动更新集群 |
+| `release.yml` | 打 `v*` 标签，或手动触发 | 构建并推送两个镜像到 GHCR，发布 agent 二进制 |
+
+**流水线只发布，不部署。** 把新镜像滚到集群上是一个人做的决定，做法见
+[deployment.md](deployment.md)。CI 里唯一会真的部署的是 `ci.yml` 的 `e2e`，
+而它部署的是一个用完就扔的 kind 集群。
 
 ## ci.yml
 
@@ -105,7 +109,7 @@ tag 来自版本标签（`v1.2.3` → `1.2.3`），手动触发时用 commit 短
 **两个镜像永远同一个 tag。** 控制台和它调用的 API 版本对不上，不是一个值得支持的
 状态。
 
-预览版按 semver 自己的规则判定：**版本号里有连字符就是预览版**（`v0.1.0-rc.1` 是，
+预览版按 semver 自己的规则判定：**版本号里有连字符就是预览版**（`v0.1.0-alpha.1` 是，
 `v0.1.0` 不是）。这个判断之所以单拎出来放在一个 job 里，是因为下面两处都要用它，
 而两处答案不一致正是预览版会变成默认安装物的原因：
 
@@ -115,7 +119,7 @@ tag 来自版本标签（`v1.2.3` → `1.2.3`），手动触发时用 commit 短
 **images** — 用 buildx 构建 `linux/amd64` 和 `linux/arm64`，推到
 `ghcr.io/<owner>/stander` 和 `ghcr.io/<owner>/stander-web`。
 
-**binaries** — 只在打 tag 时跑（`workflow_dispatch` 手动部署没有对应的 Release
+**binaries** — 只在打 tag 时跑（手动触发的那次没有版本标签，也就没有对应的 Release
 可以挂产物）。
 
 第一步是**确保 Release 存在**：推 tag 本身不会建 Release，少了这一步
@@ -152,9 +156,7 @@ git tag v0.1.0-alpha.1 && git push origin v0.1.0-alpha.1
 会发生的事：两个镜像推成 `:0.1.0-alpha.1`，**`:latest` 不动**；GitHub Release 建出来
 并标成 prerelease，agent 二进制和 `SHA256SUMS` 挂在上面。
 
-**不会**发生的事：不部署。预览版存在的意义是让人主动挑着装，推 tag 就滚上 prod 等于把
-每个预览版都变成一次换了名字的正式发布。要把某个预览版部到集群上，去 Actions 页面手动
-触发这个 workflow 并选环境——手动触发一定部署，那正是手动触发的意思。
+**不会**发生的事：不部署——正式版也一样，见下。
 
 ### 预览版和安装脚本的联动
 
@@ -170,48 +172,35 @@ GitHub 的 `/releases/latest` **不含 prerelease**，而 `scripts/install.sh` �
 curl -fsSL .../install.sh | sudo STANDER_VERSION=v0.1.0-alpha.1 bash -s -- <addr> <key>
 ```
 
-**deploy** — 把 overlay 的 `images` 块改写成刚推的镜像，渲染、`kubectl diff`
-展示变更、apply、然后等三个 Deployment 全部 rollout 完成。任何一个没起来就
-`rollout undo` 回滚并让 job 失败。
+## 部署不在流水线里
 
-没有那个 rollout status，job 会在 Pod 还在 crash-loop 的时候就变绿。
+`release.yml` 到「镜像推上 GHCR、二进制挂上 Release」为止。没有 deploy job，也就
+没有 `KUBECONFIG` secret、没有 GitHub Environment 要配。
 
-### 需要配的东西
+这条边界不是省事，是因为「构建出一个版本」和「决定线上跑哪个版本」是两个决定，凑在
+一个 tag 上就只剩一个了：想发布一个能让别人装的版本，就必须同时接受它立刻上线。
 
-`deploy` job 绑定在 GitHub Environment 上（`prod` 或 `dev`），每个环境要有：
-
-| Secret | 内容 |
-|---|---|
-| `KUBECONFIG` | base64 编码的 kubeconfig，权限只给 stander 那个 namespace |
+上线是手动的一条命令：
 
 ```bash
-kubectl config view --minify --flatten | base64 -w0
+kubectl -n stander set image \
+  deploy/stander-server stander=ghcr.io/<owner>/stander:<tag> \
+  && kubectl -n stander set image \
+  deploy/stander-web stander-web=ghcr.io/<owner>/stander-web:<tag> \
+  && kubectl -n stander set image \
+  deploy/stander-worker stander=ghcr.io/<owner>/stander:<tag>
+
+kubectl -n stander rollout status deploy/stander-server --timeout=300s
 ```
 
-推荐给 `prod` 环境打开 required reviewers，这样上线要人点一下。
+或者改 `deploy/k8s/overlays/prod/kustomization.yaml` 里的 `newTag` 再
+`kubectl apply -k`——那份 overlay 才是「线上应该是哪个版本」的记录，让流水线在背后改写
+它，等于让 git 里那个值长期是假的。**三个 Deployment 用同一个 tag**，理由和两个镜像
+同 tag 一样。集群侧的完整说明见 [deployment.md](deployment.md)。
 
-集群里的应用密钥不走 CI，另外建：
-
-```bash
-kubectl -n stander create secret generic stander-secrets \
-  --from-literal=STANDER_DATABASE_PASSWORD='...' \
-  --from-literal=STANDER_ADMIN_JWTSIGNINGKEY="$(openssl rand -base64 32)"
-```
-
-`deploy/k8s/overlays/prod/kustomization.yaml` 里也写了：这个 Secret 故意不
-generate，凭据不进 git。
-
-### agent 不在自动部署范围内
-
-`deploy/k8s/agent` 只在 CI 里被渲染和校验，不会被自动部署，它的镜像 tag 也不会
-被改写。转发节点绝大多数跑在集群外的独立 VPS 上（用 `scripts/install.sh` 装），
-把它塞进控制面的发布流程里，等于每次上线都去动别人机器上的转发进程。
-
-集群内确实跑了 agent 的话，跟着手动更新：
-
-```bash
-kubectl -n stander set image deploy/stander-agent stander=ghcr.io/<owner>/stander:<tag>
-```
+转发节点更是从来不在自动范围内：它们绝大多数跑在集群外的独立 VPS 上（用
+`scripts/install.sh` 装），把它们塞进控制面的发布流程，等于每次上线都去动别人机器上
+的转发进程。`deploy/k8s/agent` 只在 CI 里被渲染和校验。
 
 ## 三个版本号必须一起动
 
