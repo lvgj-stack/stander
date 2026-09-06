@@ -140,12 +140,14 @@ API 无状态、可任意扩副本；`stander worker` 是单例，必须恰好�
 | [configuration.md](docs/configuration.md) | 全部配置项、环境变量、默认值 |
 | [development.md](docs/development.md) | 本地开发、怎么加一个领域动作、代码生成、测试 |
 | [api.md](docs/api.md) | HTTP 接口文档 |
+| [cicd.md](docs/cicd.md) | CI 检查、版本号规则、怎么发一个版本 |
+| [CHANGELOG.md](CHANGELOG.md) | 每个版本改了什么、升级要做什么、已知问题 |
 
 ## 升级提示
 
 建库只有一个脚本：`sql/init.sql`。`v0.1.0-alpha.1` 是第一个发出去的版本，在它之前
 没有别人跑着的库，所以此前那几个 `migrate-*.sql` 的结果全都并进了 init.sql，脚本本身
-删掉了。往后每个改库结构的版本会带自己的迁移脚本。
+删掉了。往后每个改库结构的版本会带自己的迁移脚本，并记在 [CHANGELOG.md](CHANGELOG.md)。
 
 从合仓前的两个进程迁移：控制台和控制面原来是两个端口两个进程，现在是一个端口：
 
@@ -159,3 +161,7 @@ API 无状态、可任意扩副本；`stander worker` 是单例，必须恰好�
 ```bash
 go build ./... && go vet ./... && go test ./...
 ```
+
+## 许可
+
+[MIT](LICENSE)。
