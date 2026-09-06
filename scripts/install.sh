@@ -10,7 +10,8 @@
 #   sudo scripts/install.sh uninstall
 #
 # Environment overrides:
-#   STANDER_VERSION   release to install (default: latest)
+#   STANDER_VERSION   release to install (default: latest — the newest stable
+#                       release, or the newest preview if none exists yet)
 #   STANDER_REPO      owner/repo to download from (default: lvgj-stack/stander)
 #   SKIP_CHECKSUM     set to 1 to skip SHA256 verification (not recommended)
 #   STANDER_ASSET_BASE  full URL to download assets from, e.g. an internal
@@ -74,6 +75,38 @@ asset_base() {
   fi
 }
 
+# The tag of the newest release of any kind, prereleases included.
+#
+# /releases/latest — the redirect asset_base uses — deliberately skips
+# prereleases, so a project whose only published release is a preview 404s
+# there, and the install command the console hands out fails on a fresh node
+# with nothing to show for it.
+#
+# Consulted only after that stable path has already failed, which is what
+# keeps it honest: once a stable release exists the redirect resolves, this is
+# never reached, and a preview is never picked over a release. It also means
+# the API call (60/hour unauthenticated) is not spent on the normal path.
+newest_release_tag() {
+  local api="https://api.github.com/repos/$REPO/releases?per_page=1"
+  local json=""
+  if command -v curl >/dev/null 2>&1; then
+    json="$(curl -fsSL --connect-timeout 15 "$api" 2>/dev/null)" || return 1
+  elif command -v wget >/dev/null 2>&1; then
+    json="$(wget -qO- "$api" 2>/dev/null)" || return 1
+  else
+    return 1
+  fi
+  # No jq on a bare VPS. per_page=1 means the response carries exactly one
+  # release — the newest — so the first tag_name in it is the answer. Drafts
+  # are not visible to an anonymous caller and cannot show up here.
+  local tag
+  tag="$(printf '%s' "$json" \
+    | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+    | head -n1)"
+  [ -n "$tag" ] || return 1
+  echo "$tag"
+}
+
 uninstall() {
   require_root
   info "停止并移除 $SERVICE_NAME"
@@ -110,8 +143,22 @@ install_agent() {
   trap 'rm -rf "$tmp"' EXIT
 
   info "下载 stander ($VERSION, linux/$arch)"
-  fetch "$base/stander_linux_$arch" "$tmp/stander" \
-    || die "下载失败：$base/stander_linux_$arch"
+  if ! fetch "$base/stander_linux_$arch" "$tmp/stander"; then
+    # A miss on the default "latest" is the one failure worth a second try:
+    # it is what a project that has so far published only previews looks like
+    # from here. Any other version was asked for by name, and silently
+    # installing a different one would be worse than failing.
+    local tag=""
+    if [ "$VERSION" = latest ] && [ -z "${STANDER_ASSET_BASE:-}" ]; then
+      tag="$(newest_release_tag || true)"
+    fi
+    [ -n "$tag" ] || die "下载失败：$base/stander_linux_$arch"
+    warn "没有正式版，改用最新的预览版 $tag"
+    VERSION="$tag"
+    base="https://github.com/$REPO/releases/download/$tag"
+    fetch "$base/stander_linux_$arch" "$tmp/stander" \
+      || die "下载失败：$base/stander_linux_$arch"
+  fi
 
   # Verify against the published checksums. A truncated download or a wrong
   # asset is caught here rather than by systemd failing to exec later.
@@ -210,7 +257,7 @@ usage() {
   sudo scripts/install.sh uninstall
 
 环境变量：
-  STANDER_VERSION      安装的版本（默认 latest）
+  STANDER_VERSION      安装的版本（默认 latest：最新正式版；还没有正式版时用最新预览版）
   STANDER_REPO         下载来源 owner/repo（默认 lvgj-stack/stander）
   STANDER_ASSET_BASE   自定义下载基址（内网镜像/离线安装），覆盖上面两项
   SKIP_CHECKSUM=1      跳过 SHA256 校验（不推荐）

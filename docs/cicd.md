@@ -99,16 +99,57 @@ GOPROXY=https://goproxy.cn,direct scripts/e2e-kind.sh
 
 ## release.yml
 
+**meta** — 单独一个 job，只做一件事：算出 tag、owner，以及**这次是不是预览版**。
+
+tag 来自版本标签（`v1.2.3` → `1.2.3`），手动触发时用 commit 短 SHA。
+**两个镜像永远同一个 tag。** 控制台和它调用的 API 版本对不上，不是一个值得支持的
+状态。
+
+预览版按 semver 自己的规则判定：**版本号里有连字符就是预览版**（`v0.1.0-rc.1` 是，
+`v0.1.0` 不是）。这个判断之所以单拎出来放在一个 job 里，是因为下面两处都要用它，
+而两处答案不一致正是预览版会变成默认安装物的原因：
+
+- images 只在**非预览版**时才推 `:latest`；
+- binaries 建 Release 时按它决定加不加 `--prerelease`。
+
 **images** — 用 buildx 构建 `linux/amd64` 和 `linux/arm64`，推到
 `ghcr.io/<owner>/stander` 和 `ghcr.io/<owner>/stander-web`。
 
-**两个镜像永远同一个 tag。** 控制台和它调用的 API 版本对不上，不是一个值得支持的
-状态。tag 来自版本标签（`v1.2.3` → `1.2.3`），手动触发时用 commit 短 SHA。
-
 **binaries** — 只在打 tag 时跑（`workflow_dispatch` 手动部署没有对应的 Release
-可以挂产物）。交叉编译 `stander_linux_amd64` 和 `stander_linux_arm64`，生成
-`SHA256SUMS`，用 `gh release upload --clobber` 挂到这个 tag 的 Release 上。
-`scripts/install.sh` 就按机器架构从这里下载并校验，所以产物名字要和脚本对齐。
+可以挂产物）。
+
+第一步是**确保 Release 存在**：推 tag 本身不会建 Release，少了这一步
+`gh release upload` 会以「release not found」失败——而那时两个镜像已经推上去了，
+于是这个版本有镜像却没有 agent 二进制，`scripts/install.sh` 要下的正是它。已经存在
+的 Release 不动，只往里传产物，所以先在网页上写好 release notes 再推 tag 也可以。
+
+然后交叉编译 `stander_linux_amd64` 和 `stander_linux_arm64`，生成 `SHA256SUMS`，用
+`gh release upload --clobber` 挂上去。`scripts/install.sh` 就按机器架构从这里下载并
+校验，所以产物名字要和脚本对齐。
+
+### 发一个预览版
+
+```bash
+git tag v0.1.0-rc.1 && git push origin v0.1.0-rc.1
+```
+
+带连字符的 tag 走的是预览版那条路：镜像只有 `:0.1.0-rc.1`，`:latest` 不动；
+Release 建出来带 prerelease 标记。
+
+预览版和安装脚本之间有一处必须知道的联动：GitHub 的 `/releases/latest`
+**不含 prerelease**，而 `scripts/install.sh` 默认就是从那里下载的。所以控制台给出的
+那条安装命令，在「只有预览版、还没有正式版」的仓库上会 404。脚本因此多了一条**只在
+这条默认路径失败之后**才走的回退：查一次 API 拿最新的 release（含预览版）再下一次。
+一旦有了正式版，重定向就能解析，这条回退再也不会被走到，预览版也就不会盖过正式版。
+
+要装某个指定版本，绕开这套判断：
+
+```bash
+curl -fsSL .../install.sh | sudo STANDER_VERSION=v0.1.0-rc.1 bash -s -- <addr> <key>
+```
+
+注意 `deploy` job 不看预览版标记：推任何 `v*` tag 都会往 prod 滚一次。预览版不想上
+prod，就用 `workflow_dispatch` 选 `dev`，或者给 prod 环境配上 required reviewers。
 
 **deploy** — 把 overlay 的 `images` 块改写成刚推的镜像，渲染、`kubectl diff`
 展示变更、apply、然后等三个 Deployment 全部 rollout 完成。任何一个没起来就

@@ -233,6 +233,10 @@ curl -fsSL https://raw.githubusercontent.com/lvgj-stack/stander/main/scripts/ins
 （`ExecStart` 是 `stander-agent agent -a ... -k ...`）。二进制由 `release.yml`
 在打 tag 时构建发布。
 
+不指定版本时装的是最新**正式版**；仓库还没有正式版（只发过预览版）时，脚本会退回去
+装最新的预览版，并在输出里说明。有正式版之后就不会再挑到预览版了，理由见
+[cicd.md](cicd.md#发一个预览版)。
+
 常用变体：
 
 ```bash
