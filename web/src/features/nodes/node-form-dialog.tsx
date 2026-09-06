@@ -128,7 +128,30 @@ export function NodeFormDialog({ open, onOpenChange, node, onCreated }: NodeForm
                 <FormItem>
                   <FormLabel>节点名称</FormLabel>
                   <FormControl>
-                    <Input placeholder="hk-01" {...field} />
+                    <Input
+                      placeholder="hk-01"
+                      // Everything react-hook-form hands over except `name`.
+                      // A control's name becomes a property of the form
+                      // element, and HTMLFormElement is
+                      // [LegacyOverrideBuiltIns], so the control wins over
+                      // whatever it collides with. React reads
+                      // `event.target.nodeName` on every event it dispatches:
+                      // with a control named `nodeName` that read returns an
+                      // <input>, `.toLowerCase()` on it throws inside React's
+                      // dispatch, and onSubmit never runs. Nothing then calls
+                      // preventDefault, so the browser submits the form itself
+                      // — the page reloads with the fields in the query string,
+                      // the dialog is gone, and AddNode was never sent.
+                      //
+                      // The attribute has no reader to lose: the field is
+                      // controlled by react-hook-form, which tracks it by its
+                      // own name, and this form is only ever submitted through
+                      // handleSubmit.
+                      value={field.value}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      ref={field.ref}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -183,7 +206,7 @@ export function NodeFormDialog({ open, onOpenChange, node, onCreated }: NodeForm
                       // validateAddNode, and the schema reports it in the
                       // dialog where the user can read it.
                       step="any"
-                      name={field.name}
+                      // No `name` here either — see 节点名称 above.
                       ref={field.ref}
                       onBlur={field.onBlur}
                       value={Number.isNaN(field.value) ? '' : field.value}

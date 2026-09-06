@@ -88,4 +88,27 @@ describe('NodeFormDialog', () => {
       .map((el) => el.name || el.type)
     expect(invalid).toEqual([])
   })
+
+  it('names no control after a property of the form element', () => {
+    renderDialog()
+
+    // A control's `name` becomes a property of the form element itself, and
+    // `HTMLFormElement` is [LegacyOverrideBuiltIns]: the control wins over
+    // whatever it collides with. React reads `event.target.nodeName` on every
+    // event it dispatches, so a control named `nodeName` makes that read return
+    // an <input>; `.toLowerCase()` on it throws inside React's dispatch, before
+    // onSubmit runs. Nothing then calls preventDefault, so the browser falls
+    // back to submitting the form itself: the page reloads with the fields in
+    // the query string, the dialog is gone, and AddNode was never sent —
+    // 创建 looks like it did nothing, for the third time and a third reason.
+    //
+    // happy-dom does not implement that shadowing, which is why every test
+    // above passes while a browser breaks. So the rule is asserted against the
+    // prototype chain, which both agree on.
+    const form = document.getElementById('node-form') as HTMLFormElement
+    const shadowing = [...form.elements]
+      .map((el) => (el as HTMLInputElement).name)
+      .filter((name) => name && name in HTMLFormElement.prototype)
+    expect(shadowing).toEqual([])
+  })
 })
