@@ -3,8 +3,6 @@ package api
 import (
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/hertz-contrib/cors"
-	"github.com/hertz-contrib/sessions"
-	"github.com/hertz-contrib/sessions/cookie"
 
 	"github.com/lvgj-stack/stander/internal/admin/handler"
 	"github.com/lvgj-stack/stander/internal/admin/middleware"
@@ -23,18 +21,18 @@ import (
 // there are two roles, an account has one, and the account form names them
 // directly instead of resolving ids out of a table.
 func RegisterAdmin(h *server.Hertz) {
-	// The session only carries the captcha id between /auth/captcha and /auth/login.
-	h.Use(sessions.New("mysession", cookie.NewStore([]byte("captch"))))
+	// No AllowCredentials: the API carries no cookies. The only one there ever
+	// was held the captcha id, and with AllowAllOrigins it was never usable
+	// cross-origin anyway — a browser rejects `Allow-Origin: *` together with
+	// credentials. Authentication is the JWT in the Authorization header.
 	h.Use(cors.New(cors.Config{
-		AllowAllOrigins:  true,
-		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
+		AllowAllOrigins: true,
+		AllowMethods:    []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:    []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		ExposeHeaders:   []string{"Content-Length"},
 	}))
 
 	h.POST("/auth/login", handler.Auth.Login)
-	h.GET("/auth/captcha", handler.Auth.Captcha)
 
 	authed := h.Group("", middleware.Jwt())
 

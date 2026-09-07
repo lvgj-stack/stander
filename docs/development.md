@@ -96,7 +96,6 @@ got, err := service.PingNode(ctx, &req.PingNodeReq{NodeID: 1})
 | `api/health_test.go` | 探针语义（liveness 不查库） |
 | `internal/service/boundary_test.go` | 架构不变量：service 不许 import web 框架 |
 | `internal/service/*_test.go` | 领域逻辑，纯逻辑分支免数据库，需要 SQL 的用 sqlmock |
-| `internal/captcha/store_test.go` | 验证码单次使用、过期、清理 |
 | `internal/config/config_test.go` | 配置优先级，特别是环境变量覆盖 |
 
 ## 一些约定

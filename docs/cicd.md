@@ -40,10 +40,9 @@ pnpm 版本由 `web/package.json` 的 `packageManager` 字段决定，两边不�
 - `/metrics` 里有 `stander_` 开头的指标。
 - 控制台返回 SPA，且 `/admin/nodes` 这类客户端路由能 fallback 到 index.html
   （否则用户在任何页面刷新都是 404）。
-- 验证码返回的是图片，**并且带上了 session cookie**。答案在 cookie 里不在图里，
-  cookie 丢了登录就永远不可能成功。
-- 登录请求打到 handler 并被验证码拒绝。这里解不出验证码，但"被验证码拒绝"
-  恰好证明路由、JSON 绑定、数据库查询这条链路是通的——路由错了会是 404 或 502。
+- 用种子账号真登录一次，请求打的是控制台而不是 API。一个请求把整条链路走完：
+  nginx 反代 `/auth`、Hertz 路由、JSON 绑定、用户查询，最后返回 token——路由错
+  了会是 404 或 502。反过来再发一次错口令，必须拿不到 token。
 - `role` 表里有 `SUPER_ADMIN` 和 `USER` 两条记录。登录后进哪个端由角色决定，
   缺了 `SUPER_ADMIN` 就没人能进管理端。
 - `stander-worker` 在 dev overlay 里副本数是 0。worker 必须全局恰好一个实例，

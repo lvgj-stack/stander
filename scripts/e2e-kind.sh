@@ -165,7 +165,7 @@ k -n "$NAMESPACE" rollout status deploy/stander-web --timeout=180s
 # Checks. Each one asserts something that unit tests cannot reach and that
 # would otherwise only show up in production: a pod that starts but never
 # becomes ready, a console that serves its shell but cannot reach the API, a
-# captcha whose session cookie does not survive the proxy.
+# login that cannot get past the console's nginx proxy.
 
 log "Checking the singleton worker invariant"
 worker_replicas=$(k -n "$NAMESPACE" get deploy stander-worker -o jsonpath='{.spec.replicas}')
@@ -209,22 +209,21 @@ for route in /admin/nodes /portal/rules; do
     || fail "$route did not serve index.html — is it being proxied to the API?"
 done
 
-log "Console reaches the API through its nginx proxy"
-captcha_headers=$(curl -s -D - -o "$WORK_DIR/captcha.out" http://127.0.0.1:18080/auth/captcha)
-grep -qi '^content-type: image/' <<<"$captcha_headers" \
-  || fail "captcha did not come back as an image: $(head -3 <<<"$captcha_headers")"
-# The answer lives in this cookie, not in the image. Without it login can never
-# succeed, so its absence is a hard failure rather than a warning.
-grep -qi '^set-cookie: mysession' <<<"$captcha_headers" || fail "captcha response carried no session cookie"
-
-log "Login reaches the handler"
-# The captcha cannot be solved from here, so this asserts the request reaches
-# the handler and is rejected on the captcha — proving routing, JSON binding
-# and the database lookup all work. A routing failure would 404 or 502 instead.
+log "Login works through the console's nginx proxy"
+# A real login with the seeded account, sent at the console rather than at the
+# API, so one request proves the whole path: nginx proxies /auth to the
+# backend, Hertz routes it, the JSON binds, the user lookup finds the seeded
+# row, and a token comes back. A routing failure would 404 or 502 instead.
 login=$(curl -s -X POST http://127.0.0.1:18080/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"123456","captcha":"0000"}')
-grep -q '验证码不正确' <<<"$login" || fail "unexpected login response: $login"
+  -d '{"username":"admin","password":"123456"}')
+grep -q '"accessToken"' <<<"$login" || fail "login did not return a token: $login"
+
+# The other half of the same handler: a wrong password must not mint one.
+bad_login=$(curl -s -X POST http://127.0.0.1:18080/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"wrong"}')
+grep -q '账号或密码不正确' <<<"$bad_login" || fail "a wrong password was not rejected: $bad_login"
 
 # The two sides of the console are decided by role, so the seeded roles are
 # what a fresh database has to have: without SUPER_ADMIN nobody reaches the

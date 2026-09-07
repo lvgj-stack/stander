@@ -3,7 +3,6 @@ import { api } from './client'
 export interface LoginParams {
   username: string
   password: string
-  captcha: string
 }
 
 export interface LoginResult {

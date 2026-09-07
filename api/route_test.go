@@ -63,8 +63,8 @@ func TestAdminRoutesAreRegistered(t *testing.T) {
 	}
 }
 
-// /auth/login and /auth/captcha must stay outside the JWT middleware, otherwise
-// nobody can obtain a token in the first place.
+// /auth/login must stay outside the JWT middleware, otherwise nobody can
+// obtain a token in the first place.
 func TestAuthRoutesArePublic(t *testing.T) {
 	h := newServerUnderTest(t)
 
@@ -73,7 +73,6 @@ func TestAuthRoutesArePublic(t *testing.T) {
 		path   string
 	}{
 		{http.MethodPost, "/auth/login"},
-		{http.MethodGet, "/auth/captcha"},
 	} {
 		t.Run(r.method+" "+r.path, func(t *testing.T) {
 			w := ut.PerformRequest(h.Engine, r.method, r.path, nil)

@@ -195,19 +195,12 @@ create table if not exists user_roles_role
 );
 
 -- ---------------------------------------------------------------------------
--- 验证码
+-- 已删除的表
 -- ---------------------------------------------------------------------------
 
--- 登录验证码的答案。放数据库而不是进程内存，是为了让 API 能跑多副本：
--- 签发验证码的副本和校验的副本通常不是同一个。过期行由 worker 定期清理。
-create table if not exists captcha
-(
-    id         varchar(64)  not null primary key,
-    answer     varchar(32)  not null,
-    expires_at datetime(3)  not null
-);
-
-create index idx_captcha_expires_at on captcha (expires_at);
+-- 登录验证码去掉了，captcha 表没人读也没人写了。这一行是给装过旧版本的库用的：
+-- 这个脚本是幂等的，重跑一次就把遗留表清掉。新库上它什么也不做。
+drop table if exists captcha;
 
 -- ---------------------------------------------------------------------------
 -- 初始数据

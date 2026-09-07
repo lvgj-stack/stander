@@ -3,14 +3,10 @@ package handler
 import (
 	"context"
 	"crypto/md5"
-	"encoding/base64"
 	"fmt"
-	"net/http"
 	"slices"
-	"strings"
 
 	"github.com/cloudwego/hertz/pkg/app"
-	"github.com/hertz-contrib/sessions"
 
 	"github.com/lvgj-stack/stander/internal/admin/inout"
 	"github.com/lvgj-stack/stander/internal/admin/model"
@@ -25,47 +21,10 @@ var Auth = &auth{}
 
 type auth struct{}
 
-func (auth) Captcha(c context.Context, ctx *app.RequestContext) {
-	id, b64s, err := utils.GetCaptcha()
-	if err != nil {
-		Resp.Fail(c, ctx, err)
-		return
-	}
-	session := sessions.Default(ctx)
-	session.Set("captch", id)
-	if err := session.Save(); err != nil {
-		Resp.Fail(c, ctx, err)
-		return
-	}
-
-	parts := strings.SplitN(b64s, ",", 2)
-	if len(parts) != 2 {
-		Resp.Fail(c, ctx, apperr.Internalf("malformed captcha payload"))
-		return
-	}
-	imgData, err := base64.StdEncoding.DecodeString(parts[1])
-	if err != nil {
-		Resp.Fail(c, ctx, err)
-		return
-	}
-
-	// parts[0] is the data-URI prefix ("data:image/png;base64"), not a media
-	// type. Sending it verbatim produced Content-Type: data:image/png;base64.
-	contentType := strings.TrimSuffix(strings.TrimPrefix(parts[0], "data:"), ";base64")
-	ctx.Data(http.StatusOK, contentType, imgData)
-}
-
 func (auth) Login(c context.Context, ctx *app.RequestContext) {
 	var params inout.LoginReq
 	if err := ctx.BindAndValidate(&params); err != nil {
 		Resp.Fail(c, ctx, err)
-		return
-	}
-
-	session := sessions.Default(ctx)
-	captchaID, ok := session.Get("captch").(string)
-	if !ok || !utils.VerifyCaptcha(captchaID, strings.ToLower(params.Captcha)) {
-		Resp.Fail(c, ctx, apperr.Invalidf("验证码不正确"))
 		return
 	}
 

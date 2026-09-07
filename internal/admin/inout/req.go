@@ -9,7 +9,6 @@ package inout
 type LoginReq struct {
 	Username string `form:"username" json:"username" vd:"len($)>0"`
 	Password string `form:"password" json:"password" vd:"len($)>0"`
-	Captcha  string `form:"captcha" json:"captcha" vd:"len($)>0"`
 }
 type AuthPwReq struct {
 	NewPassword string `form:"newPassword" json:"newPassword" vd:"len($)>0"`

@@ -5,7 +5,6 @@ import {
   api,
   ApiError,
   clearToken,
-  fetchCaptcha,
   getToken,
   setToken,
   setUnauthorizedHandler,
@@ -58,10 +57,10 @@ describe('envelope handling', () => {
   it('treats a non-zero code as a failure even though HTTP said 200', async () => {
     // This is the whole reason the client cannot read success off the status
     // line: internal/admin/handler/base.go answers business errors with 200.
-    mockFetch(() => envelope({ code: 20001, message: '验证码不正确', originUrl: '/auth/login' }))
+    mockFetch(() => envelope({ code: 20001, message: '账号或密码不正确', originUrl: '/auth/login' }))
 
     await expect(api.post('/auth/login')).rejects.toThrowError(ApiError)
-    await expect(api.post('/auth/login')).rejects.toThrow('验证码不正确')
+    await expect(api.post('/auth/login')).rejects.toThrow('账号或密码不正确')
   })
 
   it('carries the backend code and HTTP status on the error', async () => {
@@ -108,12 +107,12 @@ describe('credentials and headers', () => {
     expect(callInit(spy).headers).not.toHaveProperty('Authorization')
   })
 
-  it('always sends credentials, because the captcha lives in a session cookie', async () => {
+  it('never sends credentials — the API sets no cookies, the token is a header', async () => {
     const spy = mockFetch(() => envelope({ code: 0, message: 'OK', data: null, originUrl: '/user' }))
 
     await api.get('/user')
 
-    expect(callInit(spy).credentials).toBe('include')
+    expect(callInit(spy).credentials).toBeUndefined()
   })
 })
 
@@ -297,19 +296,3 @@ describe('action dispatch', () => {
   })
 })
 
-describe('fetchCaptcha', () => {
-  it('sends credentials so the session cookie that holds the answer is set', async () => {
-    const spy = mockFetch(() => new Response(new Blob(['<svg/>']), { status: 200 }))
-    vi.stubGlobal('URL', { ...URL, createObjectURL: () => 'blob:captcha' })
-
-    await expect(fetchCaptcha()).resolves.toBe('blob:captcha')
-
-    expect(callUrl(spy)).toBe('/auth/captcha')
-    expect(callInit(spy).credentials).toBe('include')
-  })
-
-  it('does not try to parse an error response as an image', async () => {
-    mockFetch(() => new Response('', { status: 500 }))
-    await expect(fetchCaptcha()).rejects.toThrow('验证码获取失败')
-  })
-})

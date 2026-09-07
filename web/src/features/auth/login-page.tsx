@@ -1,14 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
-import { Loader2Icon, NetworkIcon, RefreshCwIcon } from 'lucide-react'
+import { Loader2Icon, NetworkIcon } from 'lucide-react'
 import { z } from 'zod'
 
-import { ErrorState } from '@/components/error-state'
 import { errorDetail, errorTitle } from '@/lib/errors'
-import { fetchCaptcha } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -25,7 +22,6 @@ import { useAuth } from '@/hooks/use-auth'
 const schema = z.object({
   username: z.string().min(1, '请输入用户名'),
   password: z.string().min(1, '请输入密码'),
-  captcha: z.string().min(1, '请输入验证码'),
 })
 
 type LoginValues = z.infer<typeof schema>
@@ -38,38 +34,9 @@ export function LoginPage() {
   // The log id, shown only when the failure is not something the user typed.
   const [formErrorId, setFormErrorId] = useState<string | null>(null)
 
-  /**
-   * The captcha image.
-   *
-   * The image carries no code of its own — the backend keeps the answer in a
-   * session cookie keyed to this request. So every refetch invalidates the
-   * previous code, and a failed login must refetch before the next attempt.
-   *
-   * It is never cached: a captcha that came back from cache would be one the
-   * server has already forgotten.
-   */
-  const captchaQuery = useQuery({
-    queryKey: ['captcha'],
-    queryFn: () => fetchCaptcha(),
-    retry: false,
-    gcTime: 0,
-    staleTime: 0,
-    refetchOnMount: 'always',
-  })
-  const captchaUrl = captchaQuery.data ?? null
-
-  // Each fetch mints a blob URL; release the previous one when it is replaced
-  // or the page unmounts, or they accumulate for the whole session.
-  useEffect(() => {
-    if (!captchaUrl) return
-    return () => URL.revokeObjectURL(captchaUrl)
-  }, [captchaUrl])
-
-  const refreshCaptcha = () => void captchaQuery.refetch()
-
   const form = useForm<LoginValues>({
     resolver: zodResolver(schema),
-    defaultValues: { username: '', password: '', captcha: '' },
+    defaultValues: { username: '', password: '' },
   })
 
   if (token) {
@@ -85,10 +52,6 @@ export function LoginPage() {
     } catch (error) {
       setFormError(errorTitle(error))
       setFormErrorId(errorDetail(error))
-      // The consumed captcha is dead either way; hand over a new one so the
-      // next attempt is not guaranteed to fail too.
-      form.setValue('captcha', '')
-      refreshCaptcha()
     }
   }
 
@@ -129,37 +92,6 @@ export function LoginPage() {
                     <FormControl>
                       <Input type="password" autoComplete="current-password" {...field} />
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="captcha"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>验证码</FormLabel>
-                    <div className="flex gap-2">
-                      <FormControl>
-                        <Input autoComplete="off" {...field} />
-                      </FormControl>
-                      <button
-                        type="button"
-                        onClick={refreshCaptcha}
-                        title="点击刷新验证码"
-                        className="flex h-9 w-24 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-white"
-                      >
-                        {captchaUrl ? (
-                          <img src={captchaUrl} alt="验证码" className="h-full w-full object-contain" />
-                        ) : (
-                          <RefreshCwIcon className="size-4 text-muted-foreground" />
-                        )}
-                      </button>
-                    </div>
-                    {captchaQuery.error && (
-                      <ErrorState error={captchaQuery.error} className="py-1" compact />
-                    )}
                     <FormMessage />
                   </FormItem>
                 )}

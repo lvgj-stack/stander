@@ -23,7 +23,7 @@ pnpm dev                  # http://localhost:5173
 
 需要 Node 24（见 `.nvmrc`）。开发时 vite 把 `/auth`、`/user`、
 `/stander` 转发到 `VITE_DEV_PROXY_TARGET`（默认 `http://127.0.0.1:8123`），
-所以前后端同源，验证码的 session cookie 能正常带上。
+所以前后端同源，跑起来跟部署后走 nginx 是同一组 URL。
 
 后端起法见仓库根目录的 README。
 
@@ -49,9 +49,9 @@ docker compose -f deploy/docker-compose.yaml up
 #                                 user01 / 123456（进用户端）
 ```
 
-**建议保持前端和 API 同源**（像上面这样由 nginx 反代）。验证码的答案存在服务端
-session cookie 里，跨域部署需要额外处理 `SameSite=None` 和带凭证的 CORS。
-如果确实要分开部署，构建时设 `VITE_API_BASE_URL` 指向后端：
+**建议保持前端和 API 同源**（像上面这样由 nginx 反代），省掉跨域预检和一份要维护
+的可信来源清单。分开部署也能跑——认证只是 `Authorization` 头，没有 cookie 要操心
+——构建时设 `VITE_API_BASE_URL` 指向后端即可：
 
 ```bash
 VITE_API_BASE_URL=https://api.example.com pnpm build
@@ -101,8 +101,8 @@ src/
 1. **业务失败时 HTTP 状态码仍然是 200**，只能看信封里的 `code`
    （`internal/admin/handler/base.go`）。`api/client.ts` 统一处理，页面代码
    拿到的要么是 data，要么是抛出的 `ApiError`。
-2. **验证码的答案在服务端 session 里**，不在返回的图片里。所以
-   `/auth/captcha` 和 `/auth/login` 必须带 cookie，且刷新验证码会让上一个失效。
+2. **认证只有 `Authorization` 头上的 JWT**。API 不发 cookie，`api/client.ts`
+   也不带 `credentials`——登录就是用户名加口令，没有验证码。
 3. **gorm-gen 实体的字段几乎全是指针**，JSON 里可能是 `null`。`types/api.ts`
    如实写成 `string | null`，渲染统一走 `lib/format.ts`。
 

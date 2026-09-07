@@ -44,7 +44,6 @@ internal/
   ├─ forward/           转发数据面：connector · manager · selector
   ├─ client/            agent → 控制面、gost 客户端
   ├─ observability/     Prometheus 指标、结构化日志
-  ├─ captcha/           数据库支撑的验证码存储
   ├─ config/ db/ server/ common/ utils/
 ```
 
@@ -107,8 +106,8 @@ sequenceDiagram
 进响应头，带空白、控制字符或者超长的一律换掉，否则可以伪造日志行、劈开响应头）。
 
 id 放三个地方：标准 `context.Context`、web 框架自己的 per-request context（信封
-是只拿得到后者的）、以及响应头。所以连没有信封的响应——验证码图片、`/metrics`、
-panic——也带得上，而那恰恰是最需要查日志的几种。
+是只拿得到后者的）、以及响应头。所以连没有信封的响应——`/metrics`、panic——也带
+得上，而那恰恰是最需要查日志的几种。
 
 访问日志换成了 `api.AccessLog`，因为 hertz-contrib 那个没法把 id 打进去；只出现
 在响应里的 id 是没用的，重点就是拿它去日志里找对应那行。
@@ -208,13 +207,14 @@ API 是无状态的。曾经不是——用户当期已用流量存在进程内�
 现在这个数由 `service.PeriodTrafficUsage` 从 `user_daily_traffic` 直接算出来。
 它本来就是可推导的，缓存只是徒增一个跨进程失效的隐患。
 
-验证码曾经是另一处进程内状态：答案放在 base64Captcha 的内存 store 里，session
-cookie 只带 id。多副本下签发和校验通常不在同一个副本，登录会按 (N-1)/N 的概率
-失败。现在答案存在 `captcha` 表里（`internal/captcha`），任何副本都能校验，
-过期行由 worker 定期清理。
+登录验证码曾经是另一处进程内状态：答案放在 base64Captcha 的内存 store 里，
+session cookie 只带 id。多副本下签发和校验通常不在同一个副本，登录会按 (N-1)/N
+的概率失败。搬到数据库能解决这一点，但那是给一个本身没被需要的功能加一张表、
+一个后台清理任务和一条跨进程约束——所以验证码整个去掉了，连同 session 中间件：
+登录只要用户名和口令，认证只有 `Authorization` 头上的 JWT，API 不发任何 cookie。
 
-答案没有放进 session cookie——cookie store 是**签名**不是加密的，客户端可以直接
-读出答案。
+**代价要说清楚：`/auth/login` 现在没有任何暴力破解防护**（口令还是未加盐的
+md5）。要防就在网关或反代上按 IP 限速，别把验证码加回来——它挡不住脚本，只挡真人。
 
 ## 数据库
 
@@ -279,10 +279,9 @@ select username, count(*) from user group by username having count(*) > 1;
 前端要迁就的是既有接口的三个特点：
 
 - **业务失败时 HTTP 状态码仍然是 200**，成功与否只能看信封里的 `code`。
-- **验证码的答案在服务端**（现在是 `captcha` 表），图片本身不含答案，
-  session cookie 只带 id，所以取验证码和登录这两个请求必须带 cookie。
+- **认证只有 `Authorization` 头上的 JWT**，API 不发 cookie，请求也不带
+  `credentials`。
 - **实体字段几乎全是指针**，JSON 里可能是 `null`。
 
-推荐把前端和 API 放在同一个 origin 后面（`web/nginx.conf` 就是这么反代的）。
-后端虽然开了 `AllowAllOrigins`，但跨域下验证码的 session cookie 还需要
-`SameSite=None` 才能带上，同源部署省掉这一整类问题。
+推荐把前端和 API 放在同一个 origin 后面（`web/nginx.conf` 就是这么反代的）：
+同源没有跨域预检，也不用维护一份可信来源清单。

@@ -113,7 +113,6 @@ API 无状态、可任意扩副本；`stander worker` 是单例，必须恰好�
 | `internal/admin/` | 控制台后端的 handler / 请求响应结构 / 中间件 / 模型 |
 | `internal/forward/` | 转发数据面：connector、manager、selector |
 | `internal/model/` | gorm-gen 产出的 entity 与 dal |
-| `internal/captcha/` | 数据库支撑的验证码存储（多副本可用） |
 | `internal/observability/` | Prometheus 指标与结构化日志 |
 | `web/` | 控制台前端（React + shadcn/ui；管理端与用户端在同一份静态站点里） |
 | `sql/init.sql` | 建表与初始数据（建库只有这一个脚本） |

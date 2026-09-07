@@ -83,8 +83,8 @@ Ingress 把 API 前缀直接路由到 `stander` Service，其余交给 `stander-
 | `/api/v1` | `stander`（agent 回调、gost 上报） |
 | 其余 | `stander-web`（单页应用：`/admin/*` 管理端、`/portal/*` 用户端） |
 
-**同一个 host 是有意的**：验证码的答案存在服务端 session cookie 里，跨域下需要
-`SameSite=None` 才能带上，同源省掉这一整类问题。
+**同一个 host 是有意的**：同源就没有跨域预检，也不用为 CORS 单独配一份可信来源
+清单。API 不发任何 cookie，认证只靠 `Authorization` 头上的 JWT。
 
 同一份前缀清单也出现在 `web/nginx.conf` 和 `web/vite.config.ts` 里——分别是 web
 镜像自己反代 API 时（docker compose、单独 `docker run`）和 vite dev server 用的。
@@ -310,8 +310,8 @@ Deployment（`replicas: 1`），各自配自己的 Secret，靠 nodeSelector 钉
 ## 已知限制与注意事项
 
 - **API 无状态，可以随便扩。** 用户当期已用流量是从 `user_daily_traffic` 实时算
-  的，不是进程内缓存；验证码答案存在 `captcha` 表里，签发和校验可以在不同副本。
-  两者都验证过跨副本可用。
+  的，不是进程内缓存；登录只签 JWT，不留服务端会话。副本之间没有需要共享的内存
+  状态。
 - **数据库是单点。** 清单里没有包含 MySQL 的高可用方案，生产上请用托管数据库或
   自建主从。
 - **单端口。** 控制台和控制面共用 `Server.Port`。agent 回拨和前端访问是同一个

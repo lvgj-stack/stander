@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
@@ -37,14 +37,12 @@ function renderLogin() {
 
 beforeEach(() => {
   clearToken()
+  // The login screen issues no request of its own; a stub is here so that a
+  // future one fails the test loudly instead of hitting the network.
   vi.stubGlobal(
     'fetch',
-    vi.fn(() => Promise.resolve(new Response(new Blob(['<svg/>']), { status: 200 }))),
+    vi.fn(() => Promise.reject(new Error('the login screen must not fetch on mount'))),
   )
-  vi.stubGlobal('URL', Object.assign(Object.create(URL), URL, {
-    createObjectURL: () => 'blob:captcha',
-    revokeObjectURL: () => {},
-  }))
 })
 
 afterEach(() => {
@@ -58,19 +56,12 @@ describe('app composition', () => {
     expect(screen.getByText('Stander')).toBeTruthy()
     expect(screen.getByLabelText('用户名')).toBeTruthy()
     expect(screen.getByLabelText('密码')).toBeTruthy()
-    expect(screen.getByLabelText('验证码')).toBeTruthy()
   })
 
-  it('fetches the captcha with credentials on mount', async () => {
+  it('asks for nothing but a username and a password', async () => {
     renderLogin()
 
-    await waitFor(() => {
-      expect(screen.getByAltText('验证码')).toBeTruthy()
-    })
-
-    const [url, init] = (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mock
-      .calls[0] as unknown as [string, RequestInit]
-    expect(url).toContain('/auth/captcha')
-    expect(init.credentials).toBe('include')
+    expect(screen.queryByLabelText('验证码')).toBeNull()
+    expect(globalThis.fetch).not.toHaveBeenCalled()
   })
 })

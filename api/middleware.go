@@ -20,8 +20,8 @@ import (
 // The id goes three places: the standard context, so anything downstream can
 // read it; the Hertz context, so the envelope writers can; and the response
 // header, so it is available even for the responses that carry no envelope —
-// the captcha image, /metrics, a panic — which are exactly the ones where you
-// most need to find the request in the log.
+// /metrics, a panic — which are exactly the ones where you most need to find
+// the request in the log.
 func RequestID() app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		id := observability.SanitizeRequestID(string(ctx.GetHeader(observability.RequestIDHeader)))

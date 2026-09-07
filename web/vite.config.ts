@@ -11,9 +11,8 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    // Dev talks to the Go binary directly. The backend sets
-    // AllowAllOrigins, but the captcha needs its session cookie to survive
-    // the round trip, so proxying keeps everything same-origin in dev.
+    // Dev talks to the Go binary directly. Proxying keeps dev same-origin, so
+    // the app runs against the same URLs it will see behind nginx.
     proxy: {
       // Must stay in sync with nginx.conf. `permission` and `role` are absent
       // on purpose: those endpoints are gone — the first with the dynamic

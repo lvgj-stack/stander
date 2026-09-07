@@ -13,7 +13,6 @@ import (
 	"github.com/cloudwego/hertz/pkg/common/hlog"
 
 	"github.com/lvgj-stack/stander/api"
-	"github.com/lvgj-stack/stander/internal/captcha"
 	"github.com/lvgj-stack/stander/internal/client"
 	"github.com/lvgj-stack/stander/internal/config"
 	"github.com/lvgj-stack/stander/internal/db"
@@ -50,9 +49,6 @@ func RunServer(ctx context.Context, c *config.Config, withWorker bool) error {
 	}()
 	warnSeededPasswords(ctx)
 	utils.SetJWTSigningKey(c.Admin.JWTSigningKey)
-	// Captcha answers go to the database, not a process-local map, so a login
-	// can be verified by a different replica than the one that issued it.
-	utils.SetCaptchaStore(captcha.New(db.Get()))
 
 	ctx, stop := withSignals(ctx)
 	defer stop()

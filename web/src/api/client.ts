@@ -10,9 +10,8 @@ import type { ApiEnvelope, ErrorKind } from '@/types/api'
  *    never off the status line. The code is a classification, not a magic
  *    number — see ApiEnvelope — and the envelope also carries a `requestId`
  *    that identifies the request in the server logs.
- * 2. The captcha id lives in a server-side session cookie, so the captcha and
- *    login requests must send credentials. Sending them everywhere keeps that
- *    from being a special case someone forgets.
+ * 2. Authentication is the JWT in the Authorization header, nothing else. The
+ *    API sets no cookies, so requests deliberately do not send credentials.
  */
 
 /** Where the API lives. Empty means same-origin (dev proxy / nginx reverse proxy). */
@@ -123,8 +122,6 @@ async function request<T>(method: string, path: string, options: RequestOptions 
   const response = await fetch(buildUrl(path, options.query), {
     method,
     headers,
-    // Carries the captcha session cookie. Harmless on the other endpoints.
-    credentials: 'include',
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
     signal: options.signal,
   })
@@ -215,26 +212,3 @@ export function action<T>(resource: string, name: string, payload: unknown = {})
   return api.post<T>(`/stander/${resource}`, payload, { Action: name })
 }
 
-/**
- * Fetches the captcha image as a blob URL.
- *
- * This endpoint answers with image bytes, not the JSON envelope, so it cannot
- * go through `request`. The session cookie it sets is what `/auth/login`
- * later validates the code against, which is why credentials are required.
- */
-export async function fetchCaptcha(signal?: AbortSignal): Promise<string> {
-  const response = await fetch(`${API_BASE_URL}/auth/captcha`, {
-    credentials: 'include',
-    signal,
-  })
-  if (!response.ok) {
-    throw new ApiError(
-      `验证码获取失败（HTTP ${response.status}）`,
-      response.status,
-      response.status,
-      'internal',
-      response.headers.get(REQUEST_ID_HEADER),
-    )
-  }
-  return URL.createObjectURL(await response.blob())
-}

@@ -4,7 +4,7 @@
 # the bundle rather than reading it at runtime. Leaving it empty makes the app
 # call same-origin paths, which whatever fronts this image — the nginx config
 # below under docker compose, or the Ingress under Kubernetes — routes to the
-# backend. That keeps the captcha's session cookie same-origin.
+# backend. Same-origin means no CORS preflight on any of them.
 
 # Both base images come from Docker Hub, which rate-limits anonymous pulls per
 # source IP (429 "toomanyrequests" while resolving the manifest, before a single

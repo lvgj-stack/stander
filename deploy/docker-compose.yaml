@@ -69,8 +69,8 @@ services:
         DOCKER_MIRROR: ${DOCKER_MIRROR:-docker.io}
     environment:
       # nginx reverse-proxies /auth, /user, /role and /stander to
-      # the backend, so the app and the API share an origin. That is what keeps
-      # the captcha's session cookie working without SameSite=None.
+      # the backend, so the app and the API share an origin and the browser
+      # never has to preflight a cross-origin call.
       STANDER_API_UPSTREAM: http://stander:8123
     ports:
       - "8080:8080"
